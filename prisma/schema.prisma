@@ -1,0 +1,155 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String?
+  access_token      String?
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String?
+  session_state     String?
+  user              User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model User {
+  id            String       @id @default(cuid())
+  firstName     String
+  lastName      String
+  password      String
+  email         String      @unique
+  emailVerified DateTime?
+  image         String?
+  isAdmin       Boolean     @default(false)
+  isStaff       Boolean     @default(false)
+  isRegistered  Boolean     @default(false)
+  canLogin      Boolean     @default(true)
+  mID           String?
+  role          String      @default("STUDENT")
+  accounts      Account[]
+  Proposal      Proposal[]
+  sessions      Session[]
+  team          Team?       @relation("User_lead")
+  mentees       Team[]      @relation("User_mentor")
+  teamMembers   TeamMember[]
+}
+
+model Team {
+  id            String       @id @default(cuid())
+  projectTitle  String
+  projectPillar String
+  status        String       @default("PENDING")
+  statusMessage String?
+  mentorId      String?
+  leadId        String?      @unique
+  teamNumber    String       @unique
+  batch         String
+  project       Project?
+  proposals     Proposal[]
+  lead          User?        @relation("User_lead", fields: [leadId], references: [id])
+  mentor        User?        @relation("User_mentor", fields: [mentorId], references: [id])
+  createdAt     DateTime     @default(now())
+  updatedAt     DateTime     @updatedAt
+  members       TeamMember[]
+}
+
+model TeamMember {
+  id        String   @id @default(cuid())
+  teamId    String
+  userId    String
+  joinedAt  DateTime @default(now())
+  role      String   @default("MEMBER") // Can be "LEADER" or "MEMBER"
+  name      String   // Add this field
+  email     String   // Add this field
+  rollNumber String? // Add this field
+  team      Team     @relation(fields: [teamId], references: [id])
+  user      User     @relation(fields: [userId], references: [id])
+
+  @@unique([teamId, userId])
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+}
+
+model Proposal {
+  id                Int           @id @default(autoincrement())
+  title             String
+  description       String
+  content           String
+  attachment        String?
+  link              String?
+  created_at        DateTime      @default(now())
+  updated_at        DateTime
+  state             String        @default("DRAFT")  // Changed enum to String
+  remarks           String?
+  remark_updated_at DateTime?
+  authorId          String
+  teamCode          String?
+  author            User          @relation(fields: [authorId], references: [id])
+  Team              Team?         @relation(fields: [teamCode], references: [id])
+}
+
+model Project {
+  id           Int      @id @default(autoincrement())
+  name         String
+  createdAt    DateTime @default(now())
+  poster       String?
+  link         String?
+  video        String?
+  description  String?
+  meta         String?
+  themeId      Int?
+  code         String   @unique
+  gallery      String
+  isAccepted   Boolean  @default(false)
+  presentation String?
+  report       String?
+  Team         Team     @relation(fields: [code], references: [id])
+  theme        Theme?   @relation(fields: [themeId], references: [id])
+}
+
+model Theme {
+  id          Int       @id @default(autoincrement())
+  name        String
+  description String?
+  Project     Project[]
+}
+
+// Remove the enum and replace with a comment for documentation
+// Project Pillar Types:
+// - DRUG_AWARENESS
+// - CYBERSECURITY_AWARENESS
+// - HEALTH_AND_WELLBEING
+// - INDIAN_CULTURE_AND_HERITAGE
+// - SKILL_BUILDING
+// - ENVIRONMENTAL_INITIATIVES
+// - WOMEN_EMPOWERMENT
+// - PEER_MENTORSHIP
+// - TECHNICAL_PROJECTS
+// - FINANCIAL_LITERACY
