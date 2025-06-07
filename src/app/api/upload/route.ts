@@ -59,10 +59,3 @@ export async function POST(req: Request) {
   }
 }
 
-// Limit file size to 10MB
-export const config = {
-  api: {
-    bodyParser: false,
-    sizeLimit: '10mb',
-  },
-}; 
