@@ -1,6 +1,7 @@
 import { PrismaClient } from '@prisma/client';
 import { z } from 'zod';
-import * as bcrypt from 'bcrypt';
+import bcrypt from 'bcryptjs';
+
 
 import auth from '@auth';
 

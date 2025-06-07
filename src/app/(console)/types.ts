@@ -54,6 +54,8 @@ export enum TEAM_STATUS {
 
 // eslint-disable-next-line import/no-unused-modules
 export interface ITeam {
+  id: String;
+  teamNumber: string;
   code: string;
   mentor: IUser;
   members: [string, string][];

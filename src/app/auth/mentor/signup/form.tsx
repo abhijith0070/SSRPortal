@@ -8,7 +8,7 @@ import { FormEvent, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 // import bcrypt from 'bcryptjs';
-import bcrypt from 'bcryptjs';
+// import bcrypt from 'bcryptjs';
 import { signIn } from 'next-auth/react';
 import { FcGoogle } from 'react-icons/fc';
 
