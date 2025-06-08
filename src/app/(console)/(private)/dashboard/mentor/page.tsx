@@ -75,7 +75,7 @@ export default function MentorDashboard() {
                 {/* Team Actions */}
                 <div className="flex gap-2 mt-4">
                  <Link 
-                 href={`/dashboard/mentor/teams/${team.id}`}
+                 href={`/dashboard/mentor/teams/${team.code}`}
                  className="px-4 py-2 text-sm bg-primary text-white rounded-lg hover:bg-primary/90 transition-colors"
                 >
                 View Details
