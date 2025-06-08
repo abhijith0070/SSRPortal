@@ -43,14 +43,13 @@ export async function GET() {
                 id: true,
                 title: true,
                 description: true,
-                status: true,
-                createdAt: true,
+                created_at: true,
               },
             },
             project: {
               select: {
                 id: true,
-                title: true,
+                name: true,
                 description: true,
               },
             },
@@ -65,7 +64,8 @@ export async function GET() {
 
     // Transform the data to match ITeam interface
     const team = {
-      code: teamMember.team.name,
+      code: teamMember.team.project?.id || '',
+      name: teamMember.team.teamNumber,
       mentor: teamMember.team.mentor ? {
         uid: teamMember.team.mentor.mID,
         name: `${teamMember.team.mentor.firstName} ${teamMember.team.mentor.lastName}`,
@@ -79,12 +79,11 @@ export async function GET() {
         id: proposal.id,
         title: proposal.title,
         description: proposal.description,
-        status: proposal.status,
-        timestamp: proposal.createdAt.toISOString(),
+        timestamp: proposal.created_at.toISOString(),
       })),
       project: teamMember.team.project ? {
         id: teamMember.team.project.id,
-        title: teamMember.team.project.title,
+        title: teamMember.team.project.name,
         description: teamMember.team.project.description,
         team: null, // Avoid circular reference
       } : null,
