@@ -40,7 +40,7 @@ export const authOptions: AuthOptions = {
           type: 'text',
         }
       },
-      async authorize(credentials) {
+      async authorize(credentials, req) {
         console.log('Attempting to authorize with credentials:', credentials?.email);
         
         if (!credentials?.email || !credentials?.password) {
@@ -89,8 +89,7 @@ export const authOptions: AuthOptions = {
         }
 
         console.log('Authorization successful');
-        const { password: _, ...userWithoutPass } = user;
-        return userWithoutPass;
+        return user;
       },
     }),
   ],
