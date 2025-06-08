@@ -77,24 +77,11 @@
     "zod": "^3.22.4"
   },
   "devDependencies": {
-    "@stylistic/eslint-plugin": "^2.12.1",
-    "@types/bcrypt": "^5.0.2",
-    "@types/jsonwebtoken": "^9.0.5",
-    "@types/node": "^20.17.46",
-    "@types/nodemailer": "^6.4.14",
-    "@types/react": "^18",
-    "@types/react-dom": "^18",
-    "@types/validator": "^13.11.6",
-    "@typescript-eslint/eslint-plugin": "8.0.0",
-    "@typescript-eslint/parser": "8.0.0",
-    "autoprefixer": "^10.0.1",
-    "eslint": "^8",
-    "eslint-config-airbnb-typescript": "16.2.0",
-    "eslint-config-next": "14.0.2",
-    "eslint-plugin-unused-imports": "4.1.4",
-    "postcss": "^8",
-    "tailwindcss": "^3.3.0",
-    "ts-node": "^10.9.2",
-    "typescript": "^5.8.3"
+    "@typescript-eslint/eslint-plugin": "^6.21.0",
+    "@typescript-eslint/parser": "^6.21.0",
+    "eslint": "^8.57.0",
+    "eslint-config-airbnb-typescript": "^17.1.0",
+    "eslint-config-next": "14.1.0",
+    "eslint-plugin-unused-imports": "^3.1.0"
   }
 }
