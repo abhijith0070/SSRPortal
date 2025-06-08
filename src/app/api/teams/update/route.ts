@@ -64,21 +64,50 @@ export async function PUT(req: Request) {
         name: validatedData.teamLeader.name,
         email: validatedData.teamLeader.email,
         rollNumber: validatedData.teamLeader.email.split('@')[0].split('.').pop() || '',
-        isLeader: true 
+        isLeader: true,
+        user: {
+          connectOrCreate: {
+            where: { email: validatedData.teamLeader.email },
+            create: {
+              email: validatedData.teamLeader.email,
+              name: validatedData.teamLeader.name,
+              firstName: validatedData.teamLeader.name.split(' ')[0],
+              lastName: validatedData.teamLeader.name.split(' ').slice(1).join(' ') || '',
+              password: ''
+            }
+          }
+        }
       },
-      ...validatedData.members.map(member => ({ 
-        ...member, 
-        isLeader: false 
+      ...validatedData.members.map(member => ({
+        name: member.name,
+        email: member.email,
+        rollNumber: member.rollNumber,
+        isLeader: false,
+        user: {
+          connectOrCreate: {
+            where: { email: member.email },
+            create: {
+              email: member.email,
+              firstName: member.name.split(' ')[0],
+              lastName: member.name.split(' ').slice(1).join(' ') || '',
+              password: '', // You might want to set a default password or handle this differently
+              name: member.name
+            }
+          }
+        }
       }))
     ];
 
     // Update the team
     const updatedTeam = await prisma.team.update({
-      where: { code: team.code },
+      where: { id: team.id },
       data: {
-        name: validatedData.teamName,
+        teamNumber: validatedData.teamName,
         projectTitle: validatedData.projectTitle,
-        members: JSON.stringify(allMembers)
+        members: {
+          deleteMany: {},
+          create: allMembers
+        }
       }
     });
 
@@ -87,8 +116,8 @@ export async function PUT(req: Request) {
     return NextResponse.json({
       success: true,
       team: {
-        code: updatedTeam.code,
-        name: updatedTeam.name,
+        code: updatedTeam.teamNumber,
+        name: updatedTeam.teamNumber,
         projectTitle: updatedTeam.projectTitle,
         status: updatedTeam.status,
         members: allMembers

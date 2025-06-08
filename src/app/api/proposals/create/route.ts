@@ -3,112 +3,145 @@ import { z } from 'zod';
 import { auth } from '@/lib/auth';
 import prisma from '@/lib/db/prisma';
 
+// Update schema to match Prisma model
 const proposalSchema = z.object({
   title: z.string().min(5, 'Title must be at least 5 characters'),
   description: z.string().min(100, 'Description must be at least 100 characters'),
-  objectives: z.string().min(50, 'Objectives must be at least 50 characters'),
-  methodology: z.string().min(100, 'Methodology must be at least 100 characters'),
-  expectedOutcomes: z.string().min(50, 'Expected outcomes must be at least 50 characters'),
-  timeline: z.string().min(50, 'Timeline must be at least 50 characters'),
-  references: z.string().optional(),
-  attachments: z.array(z.object({
-    url: z.string().url(),
-    filename: z.string(),
-    type: z.string(),
-  })).optional(),
-  teamId: z.string().uuid(),
+  content: z.string().min(100, 'Content must be at least 100 characters'),
+  attachment: z.string().url('Invalid attachment URL').optional(),
+  link: z.string().url('Invalid link URL').optional(),
+  teamCode: z.string().min(1, 'Team code is required')
 });
 
 export async function POST(req: Request) {
   try {
     const session = await auth();
-    if (!session?.user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    if (!session?.user?.id) {
+      return NextResponse.json({ 
+        success: false, 
+        error: 'Unauthorized' 
+      }, { status: 401 });
     }
 
     const body = await req.json();
-    const validatedData = proposalSchema.parse(body);
+    const validation = proposalSchema.safeParse(body);
 
-    // Check if team exists and user is part of it
-    const team = await prisma.team.findFirst({
-      where: {
-        id: validatedData.teamId,
-        members: {
-          some: {
-            userId: session.user.id,
+    if (!validation.success) {
+      return NextResponse.json({
+        success: false,
+        error: 'Validation failed',
+      }, { status: 400 });
+    }
+
+    const data = validation.data;
+
+    // Use transaction for atomic operations
+    const result = await prisma.$transaction(async (tx) => {
+      // Check if team exists and user is member
+      const team = await tx.team.findFirst({
+        where: {
+          id: data.teamCode,
+          OR: [
+            { leadId: session.user.id },
+            { members: { some: { userId: session.user.id } } }
+          ]
+        }
+      });
+
+      if (!team) {
+        throw new Error('TEAM_NOT_FOUND');
+      }
+
+      // Check for existing active proposals
+      const existingProposal = await tx.proposal.findFirst({
+        where: {
+          teamCode: data.teamCode,
+          state: {
+            in: ['PENDING', 'APPROVED']
+          }
+        }
+      });
+
+      if (existingProposal) {
+        throw new Error('ACTIVE_PROPOSAL_EXISTS');
+      }
+
+      // Create proposal
+      const proposal = await tx.proposal.create({
+        data: {
+          title: data.title,
+          description: data.description,
+          content: data.content,
+          attachment: data.attachment,
+          link: data.link,
+          state: 'PENDING',
+          authorId: session.user.id,
+          teamCode: data.teamCode,
+          created_at: new Date(),
+          updated_at: new Date()
+        },
+        include: {
+          author: {
+            select: {
+              firstName: true,
+              lastName: true,
+              email: true
+            }
           },
-        },
-      },
+          Team: {
+            include: {
+              mentor: {
+                select: { email: true }
+              }
+            }
+          }
+        }
+      });
+
+      // Update team status
+      await tx.team.update({
+        where: { id: data.teamCode },
+        data: { status: 'PROPOSAL_SUBMITTED' }
+      });
+
+      return proposal;
     });
 
-    if (!team) {
-      return NextResponse.json(
-        { error: 'Team not found or user not in team' },
-        { status: 404 }
-      );
-    }
-
-    // Check if team already has an active proposal
-    const existingProposal = await prisma.proposal.findFirst({
-      where: {
-        teamId: validatedData.teamId,
-        status: {
-          in: ['PENDING', 'APPROVED'],
-        },
-      },
+    return NextResponse.json({
+      success: true,
+      data: result
     });
 
-    if (existingProposal) {
-      return NextResponse.json(
-        { error: 'Team already has an active proposal' },
-        { status: 400 }
-      );
-    }
-
-    // Create proposal
-    const proposal = await prisma.proposal.create({
-      data: {
-        title: validatedData.title,
-        description: validatedData.description,
-        objectives: validatedData.objectives,
-        methodology: validatedData.methodology,
-        expectedOutcomes: validatedData.expectedOutcomes,
-        timeline: validatedData.timeline,
-        references: validatedData.references,
-        status: 'PENDING',
-        teamId: validatedData.teamId,
-        submittedById: session.user.id,
-        attachments: {
-          create: validatedData.attachments?.map(attachment => ({
-            url: attachment.url,
-            filename: attachment.filename,
-            type: attachment.type,
-          })) || [],
-        },
-      },
-      include: {
-        attachments: true,
-      },
-    });
-
-    // Update team status
-    await prisma.team.update({
-      where: { id: validatedData.teamId },
-      data: { status: 'PROPOSAL_SUBMITTED' },
-    });
-
-    return NextResponse.json(proposal);
   } catch (error) {
     console.error('Proposal creation error:', error);
+
     if (error instanceof z.ZodError) {
-      return NextResponse.json(
-        { error: 'Validation error', details: error.errors },
-        { status: 400 }
-      );
+      return NextResponse.json({
+        success: false,
+        error: 'Validation failed',
+        details: error.format()
+      }, { status: 400 });
     }
-    return NextResponse.json(
-      { error: 'Failed to create proposal' },
-      { status: 500 }
-    );
+
+    if (error instanceof Error) {
+      switch (error.message) {
+        case 'TEAM_NOT_FOUND':
+          return NextResponse.json({
+            success: false,
+            error: 'Team not found or user not authorized'
+          }, { status: 404 });
+
+        case 'ACTIVE_PROPOSAL_EXISTS':
+          return NextResponse.json({
+            success: false,
+            error: 'Team already has an active proposal'
+          }, { status: 400 });
+      }
+    }
+
+    return NextResponse.json({
+      success: false,
+      error: 'Internal server error'
+    }, { status: 500 });
   }
-} 
+}

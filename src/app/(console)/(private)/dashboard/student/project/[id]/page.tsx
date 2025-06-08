@@ -9,8 +9,8 @@ import toast from 'react-hot-toast';
 interface Project {
   id: string;
   name: string;
-  theme: string;
-  status: string;
+  theme: "Health and Wellbeing" | "Awareness Campaigns" | "Indian History and Heritage" | "Amrita Talks" | "Financial Literacy" | "21st Century Values" | "Student Mentorship" | "Student Clubs" | "Women Empowerment";
+  status: "PLANNING" | "IN_PROGRESS" | "COMPLETED";
   targetBeneficiaries: string;
   socialImpact: string;
   implementationApproach: string;

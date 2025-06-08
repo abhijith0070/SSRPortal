@@ -33,10 +33,13 @@ export default function ProposalsPage() {
           throw new Error('Failed to fetch proposals');
         }
         const data = await response.json();
-        setProposals(data);
+        // Extract proposals array from response
+        setProposals(data.data || []);
       } catch (error) {
         console.error('Error fetching proposals:', error);
         toast.error('Failed to load proposals');
+        // Set empty array on error
+        setProposals([]);
       } finally {
         setLoading(false);
       }
@@ -175,4 +178,4 @@ export default function ProposalsPage() {
       )}
     </div>
   );
-} 
+}

@@ -35,7 +35,7 @@ export async function POST(req: Request) {
 
     // Find existing project
     const existingProject = await prisma.project.findFirst({
-      where: { teamId: user.team.id }
+      where: { Team: { id: user.team.id } }
     });
 
     if (!existingProject) {
@@ -44,18 +44,12 @@ export async function POST(req: Request) {
         data: {
           name: body.title,
           theme: body.theme,
-          mentorName: body.mentorName,
-          mentorEmail: body.mentorEmail,
-          targetBeneficiaries: body.targetBeneficiaries,
-          socialImpact: body.socialImpact,
-          implementationApproach: body.implementationApproach,
-          status: body.status,
-          currentMilestone: body.currentMilestone,
-          nextMilestone: body.nextMilestone,
-          challenges: body.challenges,
-          achievements: body.achievements,
-          location: body.location,
-          teamId: user.team.id
+          gallery: '',
+          Team: {
+            connect: {
+              id: user.team.id
+            }
+          }
         }
       });
       return NextResponse.json(project);
@@ -64,24 +58,17 @@ export async function POST(req: Request) {
     // Update existing project
     const project = await prisma.project.update({
       where: { 
-        id: existingProject.id,
-        teamId: user.team.id // Ensure project belongs to user's team
+        id: existingProject.id
       },
       data: {
         name: body.title,
         theme: body.theme,
-        mentorName: body.mentorName,
-        mentorEmail: body.mentorEmail,
-        targetBeneficiaries: body.targetBeneficiaries,
-        socialImpact: body.socialImpact,
-        implementationApproach: body.implementationApproach,
-        status: body.status,
-        currentMilestone: body.currentMilestone,
-        nextMilestone: body.nextMilestone,
-        challenges: body.challenges,
-        achievements: body.achievements,
-        location: body.location,
-        updatedAt: new Date()
+        gallery: '',
+        Team: {
+          connect: {
+            id: user.team.id
+          }
+        }
       }
     });
 

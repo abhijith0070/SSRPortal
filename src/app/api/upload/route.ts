@@ -3,7 +3,6 @@ import { writeFile, mkdir } from 'fs/promises';
 import { join } from 'path';
 import { auth } from '@auth';
 
-// Ensure uploads directory exists
 const UPLOAD_DIR = join(process.cwd(), 'public', 'uploads');
 
 export async function POST(req: Request) {
@@ -13,16 +12,11 @@ export async function POST(req: Request) {
       return new NextResponse('Unauthorized', { status: 401 });
     }
 
-    // Create uploads directory if it doesn't exist
-    try {
-      await mkdir(UPLOAD_DIR, { recursive: true });
-    } catch (error) {
-      console.error('Error creating uploads directory:', error);
-    }
+    await mkdir(UPLOAD_DIR, { recursive: true });
 
     const formData = await req.formData();
     const file = formData.get('file') as File;
-    
+
     if (!file) {
       return new NextResponse('No file provided', { status: 400 });
     }
@@ -33,20 +27,24 @@ export async function POST(req: Request) {
       return new NextResponse('Invalid file type. Only PDF and images are allowed.', { status: 400 });
     }
 
+    // Enforce size limit manually
+    const maxSize = 10 * 1024 * 1024; // 10MB
+    if (file.size > maxSize) {
+      return new NextResponse('File size exceeds the 10MB limit.', { status: 400 });
+    }
+
     // Generate unique filename
     const timestamp = Date.now();
     const originalName = file.name.replace(/[^a-zA-Z0-9.-]/g, '_');
     const filename = `${timestamp}-${originalName}`;
     const filepath = join(UPLOAD_DIR, filename);
 
-    // Convert File to Buffer and save
     const bytes = await file.arrayBuffer();
     const buffer = Buffer.from(bytes);
     await writeFile(filepath, buffer);
 
-    // Return the file URL
     const fileUrl = `/uploads/${filename}`;
-    
+
     return NextResponse.json({
       url: fileUrl,
       filename: file.name,

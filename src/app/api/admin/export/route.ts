@@ -1,15 +1,14 @@
 import { NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/auth';
+import { auth } from '@/lib/auth';
 import prisma from '@/lib/prisma';
 import { Parser } from '@json2csv/plainjs';
 
 export async function GET() {
   try {
-    const session = await getServerSession(authOptions);
+    const session = await auth();
 
     // Check if user is authenticated and is an admin
-    if (!session || session.user?.role !== 'ADMIN') {
+    if (session?.user?.role !== 'ADMIN') {
       return new NextResponse('Unauthorized', { status: 401 });
     }
 
@@ -18,36 +17,75 @@ export async function GET() {
       include: {
         members: {
           include: {
-            user: true
+            user: {
+              select: {
+                firstName: true,
+                lastName: true,
+                email: true,
+                role: true
+              }
+            }
           }
         },
-        mentor: true,
-        proposals: true,
-        project: true,
+        mentor: {
+          select: {
+            firstName: true,
+            lastName: true,
+            email: true,
+            role: true
+          }
+        },
+        proposals: {
+          select: {
+            title: true,
+            state: true,
+            created_at: true
+          }
+        },
+        project: {
+          include: {
+            theme: true
+          }
+        }
       }
     });
 
     // Transform data for CSV
     const csvData = teams.map(team => ({
-      teamCode: team.code,
+      teamNumber: team.teamNumber,
       teamStatus: team.status,
-      mentorName: team.mentor.name,
+      // Mentor information
+      mentorName: `${team.mentor.firstName} ${team.mentor.lastName}`,
       mentorEmail: team.mentor.email,
+      // Team members
       memberCount: team.members.length,
-      members: team.members.map(m => m.user.name).join('; '),
-      memberEmails: team.members.map(m => m.user.email).join('; '),
+      members: team.members
+        .map(m => `${m.user.firstName} ${m.user.lastName}`)
+        .join('; '),
+      memberEmails: team.members
+        .map(m => m.user.email)
+        .join('; '),
+      // Proposal information
       proposalCount: team.proposals.length,
-      latestProposalStatus: team.proposals[team.proposals.length - 1]?.status || 'NO_PROPOSAL',
-      projectTitle: team.project?.title || 'No Project',
+      proposalStatus: team.proposals
+        .map(p => `${p.title}: ${p.state}`)
+        .join('; '),
+      latestProposalDate: team.proposals.length > 0 
+        ? team.proposals[team.proposals.length - 1].created_at.toLocaleDateString()
+        : 'No proposals',
+      // Project information
+      projectTitle: team.project?.name || 'No Project',
+      projectTheme: team.project?.theme?.name || 'No Theme',
       projectDescription: team.project?.description || 'No Description',
-      createdAt: team.createdAt.toISOString(),
-      updatedAt: team.updatedAt.toISOString(),
+      // Timestamps
+      createdAt: team.createdAt.toLocaleDateString(),
+      updatedAt: team.updatedAt.toLocaleDateString(),
     }));
 
-    // Convert to CSV
+    // Convert to CSV with expanded fields
     const parser = new Parser({
       fields: [
-        'teamCode',
+        'teamNumber',
         'teamStatus',
         'mentorName',
         'mentorEmail',
@@ -55,24 +93,28 @@ export async function GET() {
         'members',
         'memberEmails',
         'proposalCount',
-        'latestProposalStatus',
+        'proposalStatus',
+        'latestProposalDate',
         'projectTitle',
+        'projectTheme',
         'projectDescription',
         'createdAt',
         'updatedAt'
       ]
     });
+    
     const csv = parser.parse(csvData);
 
-    // Return CSV file
+    // Return CSV file with timestamp in filename
+    const timestamp = new Date().toISOString().split('T')[0];
     return new NextResponse(csv, {
       headers: {
         'Content-Type': 'text/csv',
-        'Content-Disposition': 'attachment; filename=teams-export.csv'
+        'Content-Disposition': `attachment; filename=teams-export-${timestamp}.csv`
       }
     });
   } catch (error) {
     console.error('Export error:', error);
     return new NextResponse('Internal Server Error', { status: 500 });
   }
-} 
+}

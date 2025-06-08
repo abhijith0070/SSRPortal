@@ -11,7 +11,12 @@ export async function GET(req: Request) {
       const teams = await prisma.team.findMany({
         include: {
           lead: true,
-          mentor: true
+          mentor: true,
+          members: {
+            include: {
+              user: true
+            }
+          }
         }
       });
       return NextResponse.json({ teams });
@@ -22,19 +27,36 @@ export async function GET(req: Request) {
       where: { email }
     });
 
-    console.log('Found user:', user);
+    if (!user) {
+      return NextResponse.json({ 
+        error: 'User not found' 
+      }, { 
+        status: 404 
+      });
+    }
 
     // Find teams where user is leader or member
     const teams = await prisma.team.findMany({
       where: {
         OR: [
-          { leadId: user?.id },
-          { members: { contains: email } }
+          { leadId: user.id },
+          { 
+            members: {
+              some: {
+                userId: user.id
+              }
+            }
+          }
         ]
       },
       include: {
         lead: true,
-        mentor: true
+        mentor: true,
+        members: {
+          include: {
+            user: true
+          }
+        }
       }
     });
 
@@ -44,6 +66,11 @@ export async function GET(req: Request) {
     });
   } catch (error) {
     console.error('Debug error:', error);
-    return NextResponse.json({ error: 'Debug endpoint error' }, { status: 500 });
+    return NextResponse.json({ 
+      error: 'Debug endpoint error',
+      details: error instanceof Error ? error.message : 'Unknown error'
+    }, { 
+      status: 500 
+    });
   }
-} 
+}

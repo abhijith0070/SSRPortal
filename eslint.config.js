@@ -4,22 +4,23 @@ const stylistic = require('@stylistic/eslint-plugin');
 
 module.exports = [
     {
-        // extends: [
-        //     "airbnb-typescript",
-        //     "next"
-        // ],
-        // parserOptions: {
-        //     "project": "./tsconfig.json"
-        // },
-        // overrides: [
-        //     {
-        //         "files": ["src/**/*.tsx"],
-        //         "rules": {
-        //             "import/no-unused-modules": "off"
-        //         }
-        //     }
-        // ],
-        plugins: [stylistic],
+        files: ['**/*.{js,jsx,ts,tsx}'],
+        extends: [
+            'airbnb-typescript',
+            'next/core-web-vitals'
+        ],
+        parser: '@typescript-eslint/parser',
+        parserOptions: {
+            project: './tsconfig.json',
+            ecmaVersion: 'latest',
+            sourceType: 'module'
+        },
+        plugins: ['@typescript-eslint', 'unused-imports', stylistic],
+        settings: {
+            next: {
+                rootDir: 'src/'
+            }
+        },
         rules: {
             "@next/next/no-img-element": "off",
             "@next/next/no-document-import-in-page": "off", // @todo : bug with lint plugin not detecting _document.tsx but only allowing <>.js
@@ -71,7 +72,6 @@ module.exports = [
                 "caughtErrorsIgnorePattern": "^_"
             }],
             "react/jsx-one-expression-per-line": ["warn", { "allow": "single-child" }],
-//    "import/no-unused-modules": [2, {"unusedExports": true}],
             "import/no-unused-modules": "off",
 
             // for airbnb-typescript

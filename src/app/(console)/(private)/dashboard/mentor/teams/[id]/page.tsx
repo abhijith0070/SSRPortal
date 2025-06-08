@@ -161,7 +161,7 @@ export default async function TeamDetailPage({ params }: { params: { id: string 
         {team.project && (
           <div className="bg-white p-6 rounded-lg shadow">
             <h2 className="text-xl font-semibold mb-4">Project Details</h2>
-            <p><span className="font-medium">Title:</span> {team.project.title}</p>
+            <p><span className="font-medium">Title:</span> {team.project.name}</p>
             <p><span className="font-medium">Theme:</span> {team.project.theme?.name}</p>
             <div className="mt-4">
               <h3 className="font-medium mb-2">Description</h3>
@@ -178,7 +178,7 @@ export default async function TeamDetailPage({ params }: { params: { id: string 
               {team.proposals.map((proposal) => (
                 <div key={proposal.id} className="p-4 border rounded-lg">
                   <p><span className="font-medium">Title:</span> {proposal.title}</p>
-                  <p><span className="font-medium">Status:</span> {proposal.status}</p>
+                  <p><span className="font-medium">Description:</span> {proposal.content}</p>
                   <p className="mt-2 text-gray-700">{proposal.description}</p>
                 </div>
               ))}

@@ -21,6 +21,7 @@ export async function PUT(
     const body = await req.json();
     
     // Get user's team
+ // Get user's team
     const user = await prisma.user.findUnique({
       where: { id: session.user.id },
       include: { team: true },
@@ -39,24 +40,11 @@ export async function PUT(
     // Update project
     const project = await prisma.project.update({
       where: { 
-        id: params.id,
-        teamId: user.team.id // Ensure project belongs to user's team
+      id: parseInt(user.team.id)
       },
       data: {
         name: body.title,
-        theme: body.theme,
-        mentorName: body.mentorName,
-        mentorEmail: body.mentorEmail,
-        targetBeneficiaries: body.targetBeneficiaries,
-        socialImpact: body.socialImpact,
-        implementationApproach: body.implementationApproach,
-        status: body.status,
-        currentMilestone: body.currentMilestone,
-        nextMilestone: body.nextMilestone,
-        challenges: body.challenges,
-        achievements: body.achievements,
-        location: body.location,
-        updatedAt: new Date()
+        
       }
     });
 

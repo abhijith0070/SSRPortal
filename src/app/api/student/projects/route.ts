@@ -6,22 +6,28 @@ import { z } from 'zod';
 const projectSchema = z.object({
   title: z.string().min(5, 'Title must be at least 5 characters'),
   theme: z.string().min(3, 'Theme is required'),
-  mentorName: z.string().min(3, 'Mentor name must be at least 3 characters'),
-  mentorEmail: z.string().email('Invalid mentor email'),
-  targetBeneficiaries: z.string().min(50, 'Target beneficiaries description must be at least 50 characters'),
-  socialImpact: z.string().min(100, 'Social impact description must be at least 100 characters'),
-  implementationApproach: z.string().min(100, 'Implementation approach must be at least 100 characters'),
-  status: z.enum(['PLANNING', 'IN_PROGRESS', 'COMPLETED']),
-  currentMilestone: z.string().min(5, 'Current milestone must be at least 5 characters'),
-  nextMilestone: z.string().min(5, 'Next milestone must be at least 5 characters'),
-  challenges: z.string().optional(),
-  achievements: z.string().optional(),
-  location: z.object({
-    type: z.enum(['ONLINE', 'OFFLINE']),
-    address: z.string().optional(),
-    city: z.string().optional(),
-    state: z.string().optional()
-  })
+  description: z.string().min(100, 'Description must be at least 100 characters'),
+  poster: z.string().url('Invalid poster URL').optional(),
+  link: z.string().url('Invalid link URL').optional(),
+  video: z.string().url('Invalid video URL').optional(),
+  meta: z.object({
+    mentorName: z.string().min(3, 'Mentor name must be at least 3 characters'),
+    mentorEmail: z.string().email('Invalid mentor email'),
+    status: z.enum(['PLANNING', 'IN_PROGRESS', 'COMPLETED']),
+    currentMilestone: z.string().min(5),
+    nextMilestone: z.string().min(5),
+    challenges: z.string().optional(),
+    achievements: z.string().optional(),
+    location: z.object({
+      type: z.enum(['ONLINE', 'OFFLINE']),
+      address: z.string().optional(),
+      city: z.string().optional(),
+      state: z.string().optional()
+    })
+  }),
+  presentation: z.string().url('Invalid presentation URL').optional(),
+  report: z.string().url('Invalid report URL').optional(),
+  gallery: z.string().default('[]')
 });
 
 // GET - List all projects for the team
@@ -56,8 +62,8 @@ export async function GET() {
 
     // Get team's projects
     const projects = await prisma.project.findMany({
-      where: { teamId: user.team.id },
-      orderBy: { updatedAt: 'desc' },
+      where: { Team: { id: user.team.id } },
+      orderBy: { createdAt: 'desc' },
     });
 
     return NextResponse.json(projects);
@@ -78,116 +84,81 @@ export async function POST(req: Request) {
   try {
     const session = await auth();
     if (!session?.user?.id) {
-      return new NextResponse(JSON.stringify({
+      return NextResponse.json({ 
+        success: false,
         error: 'Unauthorized',
         message: 'Please sign in to create a project'
-      }), { 
-        status: 401,
-        headers: { 'Content-Type': 'application/json' }
-      });
+      }, { status: 401 });
     }
 
     const body = await req.json();
+    const validation = projectSchema.safeParse(body);
     
-    // Validate request body
-    const validationResult = projectSchema.safeParse(body);
-    if (!validationResult.success) {
-      return new NextResponse(JSON.stringify({
-        error: 'Validation Error',
-        message: 'Invalid project data',
-        details: validationResult.error.errors
-      }), {
-        status: 400,
-        headers: { 'Content-Type': 'application/json' }
-      });
+    if (!validation.success) {
+      return NextResponse.json({
+        success: false,
+        error: 'Validation failed',
+      }, { status: 400 });
     }
 
-    // Get user's team
+    const data = validation.data;
+
     const user = await prisma.user.findUnique({
       where: { id: session.user.id },
       include: { team: true },
     });
 
     if (!user?.team) {
-      return new NextResponse(JSON.stringify({
-        error: 'Not Found',
+      return NextResponse.json({
+        success: false,
+        error: 'Team not found',
         message: 'You must be part of a team to create a project'
-      }), { 
-        status: 404,
-        headers: { 'Content-Type': 'application/json' }
-      });
+      }, { status: 404 });
     }
 
-    // Check if team already has a project
-    const existingProject = await prisma.project.findFirst({
-      where: { teamId: user.team.id }
-    });
-
-    if (existingProject) {
-      return new NextResponse(JSON.stringify({
-        error: 'Conflict',
-        message: 'Your team already has a project'
-      }), {
-        status: 409,
-        headers: { 'Content-Type': 'application/json' }
-      });
-    }
-
-    // Create new project
+    // Create project
     const project = await prisma.project.create({
       data: {
-        name: body.title,
-        code: user.team.code, // Use team code as project code
-        description: `${body.targetBeneficiaries}\n\nSocial Impact:\n${body.socialImpact}\n\nImplementation:\n${body.implementationApproach}`,
-        meta: JSON.stringify({
-          mentorName: body.mentorName,
-          mentorEmail: body.mentorEmail,
-          status: body.status,
-          currentMilestone: body.currentMilestone,
-          nextMilestone: body.nextMilestone,
-          challenges: body.challenges || '',
-          achievements: body.achievements || '',
-          location: body.location
-        }),
-        // Find or create theme
+        name: data.title,
+        description: data.description,
+        poster: data.poster,
+        link: data.link,
+        video: data.video,
+        meta: JSON.stringify(data.meta),
+        gallery: data.gallery,
+        presentation: data.presentation,
+        report: data.report,
         theme: {
           connectOrCreate: {
-            where: { name: body.theme },
-            create: { name: body.theme }
+            where: { id: 0 },  // This will always create a new theme since id 0 won't exist
+            create: { name: data.theme }
           }
         },
         Team: {
-          connect: { code: user.team.code }
+          connect: { id: user.team.id }
         }
+      },
+      include: {
+        Team: {
+          include: {
+            mentor: true
+          }
+        },
+        theme: true
       }
     });
 
-    return new NextResponse(JSON.stringify({
-      message: 'Project created successfully',
-      project
-    }), {
-      status: 200,
-      headers: { 'Content-Type': 'application/json' }
+    return NextResponse.json({
+      success: true,
+      data: project
     });
+
   } catch (error) {
     console.error('Error creating project:', error);
-    if (error instanceof prisma.PrismaClientKnownRequestError) {
-      if (error.code === 'P2002') {
-        return new NextResponse(JSON.stringify({
-          error: 'Conflict',
-          message: 'A project with this name already exists'
-        }), {
-          status: 409,
-          headers: { 'Content-Type': 'application/json' }
-        });
-      }
-    }
-    return new NextResponse(JSON.stringify({
-      error: 'Internal Server Error',
-      message: 'Failed to create project'
-    }), { 
-      status: 500,
-      headers: { 'Content-Type': 'application/json' }
-    });
+    return NextResponse.json({
+      success: false,
+      error: 'Internal server error',
+      message: error instanceof Error ? error.message : 'Failed to create project'
+    }, { status: 500 });
   }
-} 
+}

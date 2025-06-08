@@ -1,13 +1,17 @@
 import { NextResponse } from 'next/server';
-import { auth } from '@auth';
-import prisma from '@/lib/prisma';
+import { auth } from '@/lib/auth';
+import prisma from '@/lib/db/prisma';
 
 export async function GET() {
   try {
     const session = await auth();
     
     if (!session?.user?.id) {
-      return new NextResponse('Unauthorized', { status: 401 });
+      return NextResponse.json({
+        success: false,
+        error: 'Unauthorized',
+        message: 'Please sign in to view project details'
+      }, { status: 401 });
     }
 
     // Get user's team
@@ -17,25 +21,32 @@ export async function GET() {
     });
 
     if (!user?.team) {
-      return new NextResponse('No team found', { status: 404 });
+      return NextResponse.json({
+        success: false,
+        error: 'Team not found',
+        message: 'You must be part of a team to view project details'
+      }, { status: 404 });
     }
 
     // Get active project for the team
     const project = await prisma.project.findFirst({
       where: {
-        teamCode: user.team.code,
-        status: 'ACTIVE',
+        code: user.team.id
       },
       include: {
-        team: {
+        Team: {
           include: {
             members: {
-              select: {
-                id: true,
-                firstName: true,
-                lastName: true,
-                role: true,
-              },
+              include: {
+                user: {
+                  select: {
+                    id: true,
+                    firstName: true,
+                    lastName: true,
+                    role: true,
+                  }
+                }
+              }
             },
             lead: {
               select: {
@@ -55,25 +66,35 @@ export async function GET() {
             },
           },
         },
-        resources: {
+        theme: {
           select: {
             id: true,
-            title: true,
-            type: true,
-            link: true,
-            description: true,
-          },
-        },
+            name: true,
+            description: true
+          }
+        }
       },
     });
 
     if (!project) {
-      return new NextResponse('No active project found', { status: 404 });
+      return NextResponse.json({
+        success: false,
+        error: 'Not found',
+        message: 'No active project found for your team'
+      }, { status: 404 });
     }
 
-    return NextResponse.json(project);
+    return NextResponse.json({
+      success: true,
+      data: project
+    });
+
   } catch (error) {
     console.error('Error fetching project:', error);
-    return new NextResponse('Internal Server Error', { status: 500 });
+    return NextResponse.json({
+      success: false,
+      error: 'Internal server error',
+      message: error instanceof Error ? error.message : 'Failed to fetch project details'
+    }, { status: 500 });
   }
-} 
+}

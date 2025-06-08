@@ -4,6 +4,8 @@ import { useEffect, useState } from 'react';
 import { useSession } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
 import { ITeam } from '@/app/(console)/types';
+import Link from 'next/link';
+
 
 export default function MentorDashboard() {
   const { data: session, status } = useSession();
@@ -72,12 +74,12 @@ export default function MentorDashboard() {
                 
                 {/* Team Actions */}
                 <div className="flex gap-2 mt-4">
-                  <button
-                    onClick={() => router.push(`/dashboard/mentor/teams/${team.id}`)}
-                    className="px-4 py-2 text-sm bg-primary text-white rounded-lg hover:bg-primary/90 transition-colors"
-                  >
-                    View Details
-                  </button>
+                 <Link 
+                 href={`/dashboard/mentor/teams/${team.code}`}
+                 className="px-4 py-2 text-sm bg-primary text-white rounded-lg hover:bg-primary/90 transition-colors"
+                >
+                View Details
+               </Link>
                   {team.stats.status === 'PROPOSAL_SUBMISSION' && (
                     <button
                       onClick={() => router.push(`/dashboard/mentor/teams/${team.code}/proposals`)}

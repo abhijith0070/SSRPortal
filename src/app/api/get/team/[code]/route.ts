@@ -1,14 +1,13 @@
-
 import prisma from '@/lib/db/prisma';
 
 export async function GET(req: Request) {
-  const code = req?.url?.split('/').pop();
+  const teamNumber = req?.url?.split('/').pop();
   
-  if(!code)
-    return new Response(JSON.stringify({ error: 'Team code is required' }), { status: 400 });
+  if(!teamNumber)
+    return new Response(JSON.stringify({ error: 'Team number is required' }), { status: 400 });
   
   const team = await prisma.team.findUnique({
-    where: { code },
+    where: { teamNumber },
     include: { project: { select: { id: true } }, mentor: true },
   });
 

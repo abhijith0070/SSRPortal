@@ -54,7 +54,7 @@ export async function GET(
       include: { team: true },
     });
 
-    if (!user?.team || user.team.code !== proposal.teamCode) {
+    if (!user?.team || user.team.teamNumber !== proposal.teamCode) {
       return new NextResponse(JSON.stringify({
         error: 'Forbidden',
         message: 'You do not have permission to view this proposal'
@@ -139,8 +139,7 @@ export async function PUT(
     const result = proposalSchema.safeParse(body);
     if (!result.success) {
       return new NextResponse(JSON.stringify({ 
-        error: 'Validation failed', 
-        details: result.error.errors 
+        error: 'Validation failed'
       }), { 
         status: 400,
         headers: { 'Content-Type': 'application/json' }
