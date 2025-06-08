@@ -24,7 +24,7 @@ const ProjectsMain = ({ initialData }: any) => {
   const pathname = usePathname();
 
   const handleSearch = useDebouncedCallback((term: string) => {
-    const params = new URLSearchParams(searchParams);
+    const params = new URLSearchParams(searchParams ? searchParams.toString() : '');
     if(term) {
       params.set('query', term);
     } else {
