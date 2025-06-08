@@ -1,26 +1,22 @@
 import { NextResponse } from 'next/server';
 import { z } from 'zod';
-
 import prisma from '@/lib/db/prisma';
 
 const projectSubmissionSchema = z.object({
   ssrID: z.string(),
-
-  report: z.string(),
-  presentation: z.string(),
-  video: z.string(),
-  poster: z.string(),
-  photos: z.array(z.string()),
-
-  projectTitle: z.string(),
-  projectDescription: z.string(),
+  report: z.string().url('Invalid report URL'),
+  presentation: z.string().url('Invalid presentation URL'),
+  video: z.string().url('Invalid video URL'),
+  poster: z.string().url('Invalid poster URL'),
+  photos: z.array(z.string().url('Invalid photo URL')),
+  projectTitle: z.string().min(5, 'Title must be at least 5 characters'),
+  projectDescription: z.string().min(100, 'Description must be at least 100 characters'),
   projectLocation: z.object({
     type: z.enum(['online', 'offline']),
     location: z.string().optional(),
     city: z.string().optional(),
     state: z.string().optional(),
   }),
-
   projectCategory: z.string(),
   otherCategory: z.string().optional(),
 });
@@ -28,84 +24,104 @@ const projectSubmissionSchema = z.object({
 export async function POST(req: Request) {
   try {
     const body = await req.json();
-
-    // Validate the request body
     const validatedData = projectSubmissionSchema.parse(body);
-
-    // Extract the team code from ssrID
     const teamCode = validatedData.ssrID.replace(/[\s\-_]/g, '');
 
     // Check if team exists
     const team = await prisma.team.findUnique({
-      where: { code: teamCode },
+      where: { id: teamCode },
       include: { project: true },
     });
 
-    if(!team)
-      return new Response(JSON.stringify({ error: 'Team not found' }), { status: 404 });
-    
-    if(team.project)
-      return new Response(JSON.stringify({ error: 'The Project has already been submitted for this team.' }), { status: 400 });
+    if (!team) {
+      return NextResponse.json({ 
+        success: false,
+        error: 'Team not found' 
+      }, { status: 404 });
+    }
 
-    const meta: { location: any, category: string | null } = {
-      location: validatedData.projectLocation, 
-      category: null,
-    };
-    let themeId = null;
-    
-    if(validatedData.projectCategory === 'Other') {
-      meta.category = validatedData.otherCategory;
+    if (team.project) {
+      return NextResponse.json({ 
+        success: false,
+        error: 'Project already submitted for this team' 
+      }, { status: 400 });
     }
-    
-    if(validatedData.projectCategory) {
-      const res = await prisma.theme.findFirst({
-        where: { name: validatedData.projectCategory },
-      }).then(t => t);
-      themeId = res?.id;
+
+    // Handle theme creation/connection
+    let theme;
+    if (validatedData.projectCategory === 'Other' && validatedData.otherCategory) {
+      theme = await prisma.theme.create({
+        data: { name: validatedData.otherCategory }
+      });
+    } else {
+      const existingTheme = await prisma.theme.findFirst({
+        where: { name: validatedData.projectCategory }
+      });
+
+      theme = existingTheme || await prisma.theme.create({
+        data: { name: validatedData.projectCategory }
+      });
     }
-    
-    // Create the project
+
+    // Create project
     const project = await prisma.project.create({
-      data: {
-        name: validatedData.projectTitle,
-        description: validatedData.projectDescription,
-        meta: meta,
-
-        code: teamCode,
-        video: validatedData.video,
-        poster: validatedData.poster,
-        report: validatedData.report,
-        presentation: validatedData.presentation,
-        gallery: validatedData.photos || [],
-
-        themeId,
-      },
-    }).then(p => p);
+          data: {
+            name: validatedData.projectTitle,
+            description: validatedData.projectDescription,
+            poster: validatedData.poster,
+            link: validatedData.ssrID,
+            video: validatedData.video,
+            meta: JSON.stringify(validatedData.projectLocation),
+            gallery: validatedData.photos.join(','),
+            presentation: validatedData.presentation,
+            report: validatedData.report,
+            theme: {
+              connectOrCreate: {
+                where: { id: 0 },  // This will always create a new theme since id 0 won't exist
+                create: { name: validatedData.projectCategory }
+              }
+            },
+            Team: {
+              connect: { id: teamCode }
+            }
+          },
+          include: {
+            Team: {
+              include: {
+                mentor: true
+              }
+            },
+            theme: true
+          }
+        });
+    
 
     return NextResponse.json({
-      message: 'Project submitted successfully',
-      project: {
+      success: true,
+      data: {
         id: project.id,
         name: project.name,
         code: project.code,
-      },
+        themeId: project.themeId,
+        themeName: project.description
+      }
     });
 
   } catch (error) {
     console.error('Project submission error:', error);
-
-    if(error instanceof z.ZodError) {
-      return new Response(JSON.stringify({
+    
+    if (error instanceof z.ZodError) {
+      return NextResponse.json({
+        success: false,
         error: 'Invalid submission data',
-        details: error.errors,
-      }), {
-        status: 400,
-      });
+        details: error.format()
+      }, { status: 400 });
     }
 
-    return new Response(JSON.stringify({
-      error: 'Failed to submit project',
-    }), { status: 500 });
+    return NextResponse.json({
+      success: false,
+      error: 'Failed to submit project'
+    }, { status: 500 });
   }
 }
 
@@ -132,7 +148,7 @@ export async function GET(req: Request) {
         isAccepted: true,
         Team: {
           select: {
-            code: true,
+            id: true,
             members: true,
             mentor: {
               select: {
