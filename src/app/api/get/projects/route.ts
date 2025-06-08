@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
-
 import prisma from '@/lib/db/prisma';
+import { Prisma } from '@prisma/client';
 
 export const GET = async (req: NextRequest) => {
   const limit = 20;
@@ -10,15 +10,15 @@ export const GET = async (req: NextRequest) => {
 
   const projects = await prisma.project.findMany({
     where: {
-      name: {
-        contains: query as string,
-        mode: 'insensitive',
-      },
       OR: [
         {
+          name: {
+            contains: query,
+          },
+        },
+        {
           code: {
-            contains: query as string,
-            mode: 'insensitive',
+            contains: query,
           },
         },
       ],
@@ -36,5 +36,8 @@ export const GET = async (req: NextRequest) => {
     take: limit,
   });
 
-  return NextResponse.json({ projects, nextId: projects.length === limit ? projects[limit - 1].id : undefined });
+  return NextResponse.json({
+    projects,
+    nextId: projects.length === limit ? projects[limit - 1].id : undefined
+  });
 };
