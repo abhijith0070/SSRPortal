@@ -1,107 +1,155 @@
-import { promises as fs } from 'fs';
+// import { PrismaClient } from '@prisma/client';
+// import { hash } from 'bcryptjs';
 
-import brcypt from 'bcryptjs';
+// const prisma = new PrismaClient();
 
-import { THEMES } from './theme';
-import { PrismaClient } from '@prisma/client';
-const prisma = new PrismaClient();
+// // Define themes data
+// const THEMES = [
+//   { id: 1, name: 'Drug Awareness', description: 'Projects focused on drug awareness and prevention' },
+//   { id: 2, name: 'Cybersecurity', description: 'Projects related to cybersecurity awareness' },
+//   { id: 3, name: 'Health & Wellbeing', description: 'Projects promoting health and wellness' },
+//   { id: 4, name: 'Indian Culture', description: 'Projects celebrating Indian culture and heritage' },
+//   { id: 5, name: 'Skill Building', description: 'Projects focused on skill development' },
+//   { id: 6, name: 'Environment', description: 'Environmental awareness and conservation projects' },
+//   { id: 7, name: 'Women Empowerment', description: 'Projects supporting women empowerment' },
+//   { id: 8, name: 'Peer Mentorship', description: 'Peer-to-peer mentoring initiatives' },
+//   { id: 9, name: 'Technical Projects', description: 'Technology and innovation projects' },
+//   { id: 10, name: 'Financial Literacy', description: 'Projects promoting financial education' },
+// ];
 
-async function getMasterData() {
-  const file = await fs.readFile(process.cwd() + '/src/lib/db/master.json', 'utf8');
-  const data = JSON.parse(file);
-  
-  return data;
-}
+// async function main() {
+//   try {
+//     console.log('Starting database seed...');
 
-const load = async () => {
-  try {
+//     // Clear existing data
+//     await prisma.project.deleteMany();
+//     await prisma.proposal.deleteMany();
+//     await prisma.teamMember.deleteMany();
+//     await prisma.team.deleteMany();
+//     await prisma.theme.deleteMany();
+//     await prisma.user.deleteMany();
+//     console.log('Cleared existing data');
 
+//     // Create themes
+//     await Promise.all(
+//       THEMES.map((theme) => 
+//         prisma.theme.create({
+//           data: theme,
+//         })
+//       )
+//     );
+//     console.log('Created themes');
 
-    if(!process.env.ADMIN_EMAIL || !process.env.ADMIN_PASSWORD)
-      throw new Error('Admin email or password not set');
+//     // Create admin user
+//     const adminPassword = await hash('admin123', 12);
+//     const admin = await prisma.user.create({
+//       data: {
+//         firstName: 'Admin',
+//         lastName: 'User',
+//         email: 'admin@ssr.com',
+//         password: adminPassword,
+//         isAdmin: true,
+//         isStaff: true,
+//         canLogin: true,
+//         role: 'ADMIN',
+//         emailVerified: new Date(),
+//       },
+//     });
+//     console.log('Created admin user');
 
-    await prisma.theme.deleteMany();
-    
-    await prisma.theme.createMany({
-      data: THEMES.map((theme) => ({ name: theme.label, id: theme.id })),
-    });
+//     // Create mentor user
+//     const mentorPassword = await hash('mentor123', 12);
+//     const mentor = await prisma.user.create({
+//       data: {
+//         firstName: 'Mentor',
+//         lastName: 'User',
+//         email: 'mentor@ssr.com',
+//         password: mentorPassword,
+//         isStaff: true,
+//         canLogin: true,
+//         role: 'MENTOR',
+//         emailVerified: new Date(),
+//       },
+//     });
+//     console.log('Created mentor user');
 
-    // eslint-disable-next-line no-console
-    console.log('Added themes data');
+//     // Create a team with members
+//     const team = await prisma.team.create({
+//       data: {
+//         id: 'SSR2024001',
+//         projectTitle: 'Sample Project',
+//         projectPillar: 'TECHNICAL_PROJECTS',
+//         teamNumber: 'SSR2024001',
+//         batch: '2024',
+//         status: 'PENDING',
+//         mentorId: mentor.id,
+//         members: {
+//           create: [
+//             {
+//               name: 'John Doe',
+//               email: 'john@example.com',
+//               rollNumber: '20CS001',
+//               role: 'LEADER',
+//               userId: admin.id,
+//             },
+//             {
+//               name: 'Jane Smith',
+//               email: 'jane@example.com',
+//               rollNumber: '20CS002',
+//               role: 'MEMBER',
+//               userId: mentor.id,
+//             },
+//           ],
+//         },
+//       },
+//     });
+//     console.log('Created team with members');
 
+//     // Create a project for the team
+//     await prisma.project.create({
+//       data: {
+//         name: 'Sample Technical Project',
+//         description: 'A sample project description',
+//         code: team.id,
+//         gallery: '[]',
+//         themeId: 9, // Technical Projects theme
+//         meta: JSON.stringify({
+//           status: 'IN_PROGRESS',
+//           location: {
+//             type: 'OFFLINE',
+//             city: 'Sample City',
+//             state: 'Sample State',
+//           },
+//         }),
+//       },
+//     });
+//     console.log('Created project');
 
-    const DATA = await getMasterData();
+//     // Create a proposal
+//     await prisma.proposal.create({
+//       data: {
+//         title: 'Sample Proposal',
+//         description: 'A sample proposal description',
+//         content: 'Detailed proposal content goes here...',
+//         state: 'PENDING',
+//         authorId: admin.id,
+//         teamCode: team.id,
+//         updated_at: new Date(),
+//       },
+//     });
+//     console.log('Created proposal');
 
-    await prisma.team.deleteMany();
+//     console.log('Database seeding completed successfully');
+//   } catch (error) {
+//     console.error('Error seeding database:', error);
+//     process.exit(1);
+//   } finally {
+//     await prisma.$disconnect();
+//   }
+// }
 
-    await prisma.team.createMany({
-      data: Object.keys(DATA).map((key: string) => (
-        {
-          code: key,
-          members: DATA[key].members,
-        }
-      )),
-    });
-    
-    // eslint-disable-next-line no-console
-    console.log('Added teams data');
-
-    await prisma.project.deleteMany();
-
-    const allTeams = await prisma.team.findMany({
-      select: { code: true },
-    }).then((teams) => {
-      return teams.map((team) => team.code);
-    }).catch(e => console.error(e));
-    
-    const admin = await prisma.user.upsert({
-      where: { email: process.env.ADMIN_EMAIL as string },
-      update: {}, // optionally update fields if needed
-      create: {
-        isStaff: true,
-        isAdmin: true,
-        emailVerified: new Date(),
-        email: process.env.ADMIN_EMAIL as string,
-        password: await brcypt.hash(process.env.ADMIN_PASSWORD as string, 10),
-        firstName: 'SSR',
-        lastName: 'Admin',
-        canLogin: true,
-      },
-    });
-    
-
-    for(const key of allTeams as string[]) {
-      await prisma.project.create({
-        data: {
-          name: DATA[key].title,
-          code: key,
-
-          link: DATA[key].folder_url,
-          meta: {
-            year: key.substring(3, 7),
-            date: DATA[key].date,
-            
-            place: DATA[key].place,
-            district: DATA[key].district,
-            state: DATA[key].state,
-
-            mentor: DATA[key].mentor,
-          },
-
-          isAccepted: true,
-        },
-      });
-    }
-    
-    // eslint-disable-next-line no-console
-    console.log('Added projects data');
-
-  } catch (e) {
-    console.error(e);
-    process.exit(1);
-  } finally {
-    await prisma.$disconnect();
-  }
-};
-
-
+// main()
+//   .catch((error) => {
+//     console.error(error);
+//     process.exit(1);
+//   });
