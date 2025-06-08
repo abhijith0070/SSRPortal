@@ -1,168 +1,152 @@
-import { NextResponse } from 'next/server';
-import { auth } from '@auth';
-import prisma from '@/lib/prisma';
-import { z } from 'zod';
+// import { NextResponse } from 'next/server';
+// import { auth } from '@/lib/auth';
+// import prisma from '@/lib/db/prisma';
+// import { z } from 'zod';
 
-const proposalSchema = z.object({
-  title: z.string().min(5, 'Title must be at least 5 characters'),
-  description: z.string().min(100, 'Description must be at least 100 characters'),
-  content: z.string().min(100, 'Content must be at least 100 characters').default(''),
-  attachment: z.string().optional(),
-  link: z.string().optional(),
-});
+// const proposalSchema = z.object({
+//   title: z.string().min(5, 'Title must be at least 5 characters'),
+//   description: z.string().min(100, 'Description must be at least 100 characters'),
+//   content: z.string().min(100, 'Content must be at least 100 characters'),
+//   attachment: z.string().url('Invalid URL').optional(),
+//   link: z.string().url('Invalid URL').optional(),
+// });
 
-export async function POST(req: Request) {
-  try {
-    console.log('Starting proposal creation...');
+// export async function POST(req: Request) {
+//   try {
+//     const session = await auth();
+//     if (!session?.user?.id) {
+//       return NextResponse.json({ 
+//         success: false,
+//         error: 'Unauthorized',
+//         message: 'Please sign in to submit a proposal'
+//       }, { status: 401 });
+//     }
+
+//     const body = await req.json();
+//     const validation = proposalSchema.safeParse(body);
     
-    const session = await auth();
-    if (!session?.user?.id) {
-      console.error('Authentication failed: No user session');
-      return new NextResponse(JSON.stringify({ 
-        error: 'Unauthorized',
-        message: 'Please sign in to submit a proposal'
-      }), { 
-        status: 401,
-        headers: { 'Content-Type': 'application/json' }
-      });
-    }
+//     if (!validation.success) {
+//       return NextResponse.json({
+//         success: false,
+//         error: 'Validation failed',
+//         details: validation.error.format()
+//       }, { status: 400 });
+//     }
 
-    console.log('User authenticated:', session.user.id);
+//     const data = validation.data;
 
-    let body;
-    try {
-      body = await req.json();
-      console.log('Received proposal data:', body);
-    } catch (parseError) {
-      console.error('Failed to parse request body:', parseError);
-      return new NextResponse(JSON.stringify({
-        error: 'Invalid request',
-        message: 'Failed to parse request body'
-      }), { 
-        status: 400,
-        headers: { 'Content-Type': 'application/json' }
-      });
-    }
-    
-    // Validate request body against schema
-    const result = proposalSchema.safeParse(body);
-    if (!result.success) {
-      console.error('Validation failed:', result.error.errors);
-      return new NextResponse(JSON.stringify({ 
-        error: 'Validation failed', 
-        details: result.error.errors,
-        message: 'Please check all required fields'
-      }), { 
-        status: 400,
-        headers: { 'Content-Type': 'application/json' }
-      });
-    }
+//     // Get user's team
+//     const user = await prisma.user.findUnique({
+//       where: { id: session.user.id },
+//       include: { team: true },
+//     });
 
-    console.log('Proposal data validated successfully');
+//     if (!user?.team) {
+//       return NextResponse.json({
+//         success: false,
+//         error: 'Team not found',
+//         message: 'You must be part of a team to submit a proposal'
+//       }, { status: 404 });
+//     }
 
-    // Get user's team
-    try {
-      const user = await prisma.user.findUnique({
-        where: { id: session.user.id },
-        include: { team: true },
-      });
+//     // Create proposal
+//     const proposal = await prisma.proposal.create({
+//       data: {
+//         title: data.title,
+//         description: data.description,
+//         content: data.content,
+//         attachment: data.attachment,
+//         link: data.link,
+//         state: 'DRAFT',
+//         teamId: user.team.id,
+//         authorId: session.user.id,
+//         updated_at: new Date(),
+//       },
+//       include: {
+//         author: {
+//           select: {
+//             firstName: true,
+//             lastName: true,
+//             email: true
+//           }
+//         },
+//         team: {
+//           include: {
+//             mentor: {
+//               select: { email: true }
+//             }
+//           }
+//         }
+//       }
+//     });
 
-      if (!user?.team) {
-        console.error('No team found for user:', session.user.id);
-        return new NextResponse(JSON.stringify({
-          error: 'Team not found',
-          message: 'You must be part of a team to submit a proposal'
-        }), { 
-          status: 404,
-          headers: { 'Content-Type': 'application/json' }
-        });
-      }
+//     return NextResponse.json({
+//       success: true,
+//       data: proposal
+//     });
 
-      console.log('Found user team:', user.team.code);
+//   } catch (error) {
+//     console.error('Error creating proposal:', error);
+//     return NextResponse.json({
+//       success: false,
+//       error: 'Internal server error',
+//       message: error instanceof Error ? error.message : 'Failed to create proposal'
+//     }, { status: 500 });
+//   }
+// }
 
-      // Create proposal with all fields
-      const proposal = await prisma.proposal.create({
-        data: {
-          title: body.title,
-          description: body.description,
-          content: body.content || body.objectives + '\n\n' + body.methodology + '\n\n' + body.expectedOutcomes + '\n\n' + body.timeline + (body.references ? '\n\nReferences:\n' + body.references : ''),
-          attachment: body.attachment,
-          link: body.link,
-          state: 'DRAFT',
-          teamCode: user.team.code,
-          authorId: session.user.id,
-          updated_at: new Date(),
-        },
-      });
+// export async function GET() {
+//   try {
+//     const session = await auth();
+//     if (!session?.user?.id) {
+//       return NextResponse.json({
+//         success: false,
+//         error: 'Unauthorized'
+//       }, { status: 401 });
+//     }
 
-      console.log('Proposal created successfully:', proposal.id);
-      return NextResponse.json({
-        message: 'Proposal created successfully',
-        proposal
-      });
+//     const user = await prisma.user.findUnique({
+//       where: { id: session.user.id },
+//       include: { team: true },
+//     });
 
-    } catch (dbError: any) {
-      console.error('Database error:', dbError);
-      return new NextResponse(JSON.stringify({
-        error: 'Database error',
-        message: dbError.message || 'Failed to create proposal'
-      }), { 
-        status: 500,
-        headers: { 'Content-Type': 'application/json' }
-      });
-    }
+//     if (!user?.team) {
+//       return NextResponse.json({
+//         success: false,
+//         error: 'Team not found'
+//       }, { status: 404 });
+//     }
 
-  } catch (error: any) {
-    console.error('Unexpected error:', error);
-    return new NextResponse(JSON.stringify({
-      error: 'Internal server error',
-      message: error.message || 'An unexpected error occurred'
-    }), { 
-      status: 500,
-      headers: { 'Content-Type': 'application/json' }
-    });
-  }
-}
+//     const proposals = await prisma.proposal.findMany({
+//       where: {
+//         team: {
+//           id: user.team.id
+//         },
+//       },
+//       orderBy: {
+//         updated_at: 'desc',
+//       },
+//       include: {
+//         author: {
+//           select: {
+//             firstName: true,
+//             lastName: true,
+//             email: true
+//           }
+//         }
+//       }
+//     });
 
-export async function GET() {
-  try {
-    const session = await auth();
-    
-    if (!session?.user?.id) {
-      return new NextResponse('Unauthorized', { status: 401 });
-    }
+//     return NextResponse.json({
+//       success: true,
+//       data: proposals
+//     });
 
-    // Get user's team
-    const user = await prisma.user.findUnique({
-      where: { id: session.user.id },
-      include: { team: true },
-    });
-
-    if (!user?.team) {
-      return new NextResponse('No team found', { status: 404 });
-    }
-
-    // Get all proposals for the team
-    const proposals = await prisma.proposal.findMany({
-      where: {
-        teamCode: user.team.code,
-      },
-      orderBy: {
-        updated_at: 'desc',
-      },
-      include: {
-        author: {
-          select: {
-            firstName: true,
-            lastName: true,
-          },
-        },
-      },
-    });
-
-    return NextResponse.json(proposals);
-  } catch (error) {
-    console.error('Error fetching proposals:', error);
-    return new NextResponse('Internal Server Error', { status: 500 });
-  }
-} 
+//   } catch (error) {
+//     console.error('Error fetching proposals:', error);
+//     return NextResponse.json({
+//       success: false,
+//       error: 'Internal server error'
+//     }, { status: 500 });
+//   }
+// }
