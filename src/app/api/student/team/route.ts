@@ -19,7 +19,8 @@ export async function GET() {
       where: {
         leadId: session.user.id
       },
-          include: {
+          select: {
+            members: true,
             lead: {
               select: {
             id: true,
@@ -66,7 +67,7 @@ export async function GET() {
       ...team,
       stats: {
         proposals: team.proposals.length,
-        members: team.members ? JSON.parse(team.members as string).length : 0,
+        members: team.members ? team.members.length : 0,
         status: team.project ? 'PROPOSAL_ACCEPTED' : 'PROPOSAL_SUBMISSION'
       }
     };
