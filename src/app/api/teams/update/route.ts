@@ -1,144 +1,137 @@
 import { NextResponse } from 'next/server';
-import { z } from 'zod';
 import { auth } from '@/lib/auth';
 import prisma from '@/lib/db/prisma';
-
-// Schema for team members (no database validation)
-const teamMemberSchema = z.object({
-  name: z.string().min(2, 'Name must be at least 2 characters'),
-  email: z.string()
-    .email('Invalid email format')
-    .endsWith('@am.students.amrita.edu', 'Must be an Amrita student email (@am.students.amrita.edu)'),
-  rollNumber: z.string().min(5, 'Invalid roll number'),
-});
-
-// Separate schema for team leader since we don't need roll number
-const teamLeaderSchema = z.object({
-  name: z.string().min(2, 'Name must be at least 2 characters'),
-  email: z.string()
-    .email('Invalid email format')
-    .endsWith('@am.students.amrita.edu', 'Must be an Amrita student email (@am.students.amrita.edu)'),
-});
+import { z } from 'zod';
 
 const updateTeamSchema = z.object({
-  teamName: z.string().min(3, 'Team name must be at least 3 characters'),
-  projectTitle: z.string().min(5, 'Project title must be at least 5 characters'),
-  members: z.array(teamMemberSchema).min(4, 'Minimum 4 members required').max(6, 'Maximum 6 members allowed'),
-  teamLeader: teamLeaderSchema,
+  projectTitle: z.string().min(5),
+  projectPillar: z.string(),
+  batch: z.string(),
+  members: z.array(z.object({
+    name: z.string(),
+    email: z.string().email(),
+    rollNumber: z.string()
+  })).min(3).max(5),
+  mentorId: z.string().optional()
 });
 
 export async function PUT(req: Request) {
   try {
     const session = await auth();
-    if (!session?.user?.email) {
+    if (!session?.user?.id) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
     const body = await req.json();
-    console.log('Received update request body:', body);
-
-    const validatedData = updateTeamSchema.parse(body);
-    console.log('Validated update data:', validatedData);
-
-    // Find the user's team
-    const user = await prisma.user.findUnique({
-      where: { email: session.user.email }
-    });
-
-    if (!user) {
-      return NextResponse.json({ error: 'User not found' }, { status: 404 });
+    const validation = updateTeamSchema.safeParse(body);
+    
+    if (!validation.success) {
+      return NextResponse.json({
+        success: false,
+        error: 'Validation failed',
+      }, { status: 400 });
     }
 
-    // Find the team where the user is the leader
-    const team = await prisma.team.findFirst({
-      where: { leadId: user.id }
-    });
+    const data = validation.data;
 
-    if (!team) {
-      return NextResponse.json({ error: 'Team not found or you are not the team leader' }, { status: 404 });
-    }
-
-    // Store all members including the team leader
-    const allMembers = [
-      { 
-        name: validatedData.teamLeader.name,
-        email: validatedData.teamLeader.email,
-        rollNumber: validatedData.teamLeader.email.split('@')[0].split('.').pop() || '',
-        isLeader: true,
-        user: {
-          connectOrCreate: {
-            where: { email: validatedData.teamLeader.email },
-            create: {
-              email: validatedData.teamLeader.email,
-              name: validatedData.teamLeader.name,
-              firstName: validatedData.teamLeader.name.split(' ')[0],
-              lastName: validatedData.teamLeader.name.split(' ').slice(1).join(' ') || '',
-              password: ''
-            }
+    // First find the team outside the transaction
+    const existingTeam = await prisma.team.findFirst({
+      where: {
+        status: 'REJECTED',
+        members: {
+          some: {
+            userId: session.user.id,
+            role: 'LEADER'
           }
         }
       },
-      ...validatedData.members.map(member => ({
-        name: member.name,
-        email: member.email,
-        rollNumber: member.rollNumber,
-        isLeader: false,
-        user: {
-          connectOrCreate: {
-            where: { email: member.email },
-            create: {
-              email: member.email,
-              firstName: member.name.split(' ')[0],
-              lastName: member.name.split(' ').slice(1).join(' ') || '',
-              password: '', // You might want to set a default password or handle this differently
-              name: member.name
-            }
-          }
-        }
-      }))
-    ];
-
-    // Update the team
-    const updatedTeam = await prisma.team.update({
-      where: { id: team.id },
-      data: {
-        teamNumber: validatedData.teamName,
-        projectTitle: validatedData.projectTitle,
-        members: {
-          deleteMany: {},
-          create: allMembers
-        }
+      include: {
+        members: true
       }
     });
 
-    console.log('Team updated:', updatedTeam);
+    if (!existingTeam) {
+      return NextResponse.json({
+        success: false,
+        error: 'No rejected team found'
+      }, { status: 404 });
+    }
+
+    // Now do the update in a single transaction
+    const result = await prisma.$transaction(async (tx) => {
+      // First delete existing members
+      await tx.teamMember.deleteMany({
+        where: {
+          AND: [
+            { teamId: existingTeam.id },
+            { role: 'MEMBER' }
+          ]
+        }
+      });
+
+      // Then update the team and create new members
+      const updatedTeam = await tx.team.update({
+        where: { id: existingTeam.id },
+        data: {
+          projectTitle: data.projectTitle,
+          projectPillar: data.projectPillar,
+          status: 'PENDING',
+          mentorId: data.mentorId,
+          members: {
+            create: data.members.map(member => ({
+              name: member.name,
+              email: member.email,
+              rollNumber: member.rollNumber,
+              role: 'MEMBER',
+              user: {
+                connect: {
+                  email: member.email
+                }
+              }
+            }))
+          }
+        },
+        include: {
+          members: {
+            include: {
+              user: {
+                select: {
+                  firstName: true,
+                  lastName: true,
+                  email: true
+                }
+              }
+            }
+          },
+          mentor: true
+        }
+      });
+
+      return updatedTeam;
+    }, {
+      maxWait: 5000, // 5 seconds max wait time
+      timeout: 10000 // 10 seconds timeout
+    });
 
     return NextResponse.json({
       success: true,
-      team: {
-        code: updatedTeam.teamNumber,
-        name: updatedTeam.teamNumber,
-        projectTitle: updatedTeam.projectTitle,
-        status: updatedTeam.status,
-        members: allMembers
-      }
+      data: result
     });
+
   } catch (error) {
-    console.error('Team update error:', error);
-    if (error instanceof z.ZodError) {
-      const errorDetails = error.errors.map(err => ({
-        path: err.path.join('.'),
-        message: err.message
-      }));
-      return NextResponse.json(
-        { error: 'Validation error', details: errorDetails },
-        { status: 400 }
-      );
+    console.error('Error updating team:', error);
+    
+    // Handle specific Prisma errors
+    if (error.code === 'P2028') {
+      return NextResponse.json({
+        success: false,
+        error: 'Transaction failed, please try again'
+      }, { status: 500 });
     }
 
-    return NextResponse.json(
-      { error: 'Failed to update team. Please try again.' },
-      { status: 500 }
-    );
+    return NextResponse.json({
+      success: false,
+      error: 'Failed to update team'
+    }, { status: 500 });
   }
-} 
+}
