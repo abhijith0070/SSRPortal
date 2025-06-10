@@ -56,10 +56,12 @@ interface TeamFormProps {
     mentorId: string;
     batch: string;
     teamNumber: string;
+    isRejected?: boolean;
     members: Array<{
       name: string;
       email: string;
       rollNumber: string;
+      isLeader?: boolean;
     }>;
   };
   isEditing?: boolean;
@@ -67,9 +69,11 @@ interface TeamFormProps {
 
 export default function TeamForm({ initialData, isEditing = false }: TeamFormProps) {
   const { data: session, status } = useSession();
+  const [isRejectedTeam, setIsRejectedTeam] = useState(isEditing);
   const [isLoading, setIsLoading] = useState(false);
   const [mentors, setMentors] = useState<Array<{ id: string; name: string }>>([]);
   const [isSubmitted, setIsSubmitted] = useState(false);
+  const [teamData, setTeamData] = useState<any>(null);
   const router = useRouter();
 
   // Fetch mentors when component mounts
@@ -92,12 +96,6 @@ export default function TeamForm({ initialData, isEditing = false }: TeamFormPro
 
     fetchMentors();
   }, []);
-
-  // Log session data when it changes
-  useEffect(() => {
-    console.log('Session Status:', status);
-    console.log('Session Data:', session);
-  }, [session, status]);
 
   const {
     register,
@@ -126,10 +124,22 @@ export default function TeamForm({ initialData, isEditing = false }: TeamFormPro
   // Reset form with initial data when editing and data changes
   useEffect(() => {
     if (initialData && isEditing) {
-      console.log('Resetting form with data:', initialData);
-      reset(initialData);
+      // Only set non-leader members
+      const nonLeaderMembers = initialData.members.filter(m => !m.isLeader);
+      
+      reset({
+        projectTitle: initialData.projectTitle,
+        projectPillar: initialData.projectPillar,
+        batch: initialData.batch,
+        teamNumber: initialData.teamNumber, // Keep original team number
+        mentorId: initialData.mentorId,
+        members: nonLeaderMembers
+      });
+      
+      setIsRejectedTeam(initialData.isRejected);
+      setValue('teamNumber', initialData.teamNumber);
     }
-  }, [initialData, isEditing, reset]);
+  }, [initialData, isEditing, reset, setValue]);
 
   const members = watch('members');
 
@@ -152,49 +162,35 @@ export default function TeamForm({ initialData, isEditing = false }: TeamFormPro
     }
   };
 
+  // Modify onSubmit to handle updates
   const onSubmit = async (data: TeamFormData) => {
     try {
       setIsLoading(true);
-      console.log('Form submitted with data:', data);
 
-      if (!session?.user) {
-        throw new Error('No session found');
-      }
+      const endpoint = isEditing ? '/api/teams/update' : '/api/teams/create';
+      const method = isEditing ? 'PUT' : 'POST';
 
-      const payload = {
-        projectTitle: data.projectTitle,
-        projectPillar: data.projectPillar,
-        teamNumber: data.teamNumber,
-        batch: data.batch,
-        mentorId: data.mentorId,
-        // No need to send leader info since it's handled by session
-        members: data.members.map(member => ({
-          name: member.name,
-          email: member.email,
-          rollNumber: member.rollNumber
-        }))
-      };
-
-      console.log('Sending payload:', payload);
-
-      const response = await fetch('/api/teams/create', {
-        method: 'POST',
+      const response = await fetch(endpoint, {
+        method,
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
+        body: JSON.stringify({
+          ...data,
+          teamNumber: isEditing ? initialData?.teamNumber : data.teamNumber // Use original team number for updates
+        })
       });
 
       if (!response.ok) {
         const errorData = await response.json();
-        throw new Error(errorData.error || 'Failed to create team');
+        throw new Error(errorData.error || 'Failed to submit team');
       }
 
-      // Show success message and prevent form resubmission
       setIsSubmitted(true);
-      toast.success('Team request submitted! Waiting for mentor approval.');
+      toast.success(isEditing ? 'Team updated successfully!' : 'Team created successfully!');
+      router.push('/dashboard/student');
 
-    } catch (error: any) {
+    } catch (error) {
       console.error('Submit error:', error);
-      toast.error(error.message || 'Failed to create team');
+      toast.error(error instanceof Error ? error.message : 'Failed to submit team');
     } finally {
       setIsLoading(false);
     }
@@ -298,25 +294,24 @@ export default function TeamForm({ initialData, isEditing = false }: TeamFormPro
     );
   }
 
+  // Update the batch and team number fields
   return (
     <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
+      {/* Show team leader info but disable editing */}
       <div className="bg-blue-50 border border-blue-200 rounded-md p-4 mb-4">
         <p className="text-blue-700">
-          You will be the team leader using your registered email: {session?.user?.email}
+          Team Leader: {session?.user?.email}
         </p>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        {/* Batch and Team Number fields */}
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">Batch</label>
-          <select
-            className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-primary focus:ring-primary"
-            value={selectedBatch}
-            onChange={e => {
-              setSelectedBatch(e.target.value);
-              setValue('batch', e.target.value);
-              setValue('teamNumber', ''); // reset team number when batch changes
-            }}
+          <label className="block text-sm font-medium text-gray-700">Batch</label>
+          <select 
+            {...register('batch')}
+            disabled={isEditing} // Disable for rejected teams
+            className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-primary focus:ring-primary disabled:bg-gray-100"
           >
             <option value="">Select a batch</option>
             {batchOptions.map(batch => (
@@ -329,19 +324,13 @@ export default function TeamForm({ initialData, isEditing = false }: TeamFormPro
         </div>
 
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">Team Number</label>
-          <select
-            className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-primary focus:ring-primary"
+          <label className="block text-sm font-medium text-gray-700">Team Number</label>
+          <input
+            type="text"
             {...register('teamNumber')}
-            value={watch('teamNumber')}
-            onChange={e => setValue('teamNumber', e.target.value)}
-            disabled={!selectedBatch}
-          >
-            <option value="">{selectedBatch ? 'Select a team number' : 'Select a batch first'}</option>
-            {filteredTeamOptions.map(team => (
-              <option key={team} value={team}>{team}</option>
-            ))}
-          </select>
+            disabled={isEditing} // Disable for rejected teams
+            className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-primary focus:ring-primary disabled:bg-gray-100"
+          />
           {errors.teamNumber && (
             <p className="mt-1 text-sm text-red-600">{errors.teamNumber.message}</p>
           )}
@@ -464,7 +453,7 @@ export default function TeamForm({ initialData, isEditing = false }: TeamFormPro
 
       <button
         type="submit"
-        disabled={isLoading || status !== 'authenticated'}
+        disabled={isLoading || !session?.user || Object.keys(errors).length > 0}
         className="w-full bg-primary text-white py-2 px-4 rounded-md hover:bg-primary-dark transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
       >
         {isLoading ? (
@@ -472,6 +461,8 @@ export default function TeamForm({ initialData, isEditing = false }: TeamFormPro
             <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
             <span>Submitting...</span>
           </>
+        ) : isEditing ? (
+          'Update Team'
         ) : (
           'Create Team'
         )}
