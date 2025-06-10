@@ -162,26 +162,47 @@ export default function TeamForm({ initialData, isEditing = false }: TeamFormPro
     }
   };
 
-  // Modify onSubmit to handle updates
+  // Update the onSubmit function
   const onSubmit = async (data: TeamFormData) => {
     try {
       setIsLoading(true);
+      console.log('Submitting data:', data); // Debug log
 
       const endpoint = isEditing ? '/api/teams/update' : '/api/teams/create';
       const method = isEditing ? 'PUT' : 'POST';
 
+      // Prepare submission data
+      const submissionData = {
+        projectTitle: data.projectTitle,
+        projectPillar: data.projectPillar,
+        batch: data.batch,
+        teamNumber: isEditing ? initialData?.teamNumber : data.teamNumber,
+        mentorId: data.mentorId,
+        members: data.members.map(member => ({
+          name: member.name,
+          email: member.email,
+          rollNumber: member.rollNumber.toUpperCase() // Ensure consistent format
+        }))
+      };
+
+      console.log('Sending to endpoint:', endpoint, submissionData); // Debug log
+
       const response = await fetch(endpoint, {
         method,
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          ...data,
-          teamNumber: isEditing ? initialData?.teamNumber : data.teamNumber // Use original team number for updates
-        })
+        headers: { 
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(submissionData)
       });
 
+      const result = await response.json();
+
       if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || 'Failed to submit team');
+        throw new Error(result.error || 'Failed to submit team');
+      }
+
+      if (!result.success) {
+        throw new Error(result.error || 'Operation failed');
       }
 
       setIsSubmitted(true);
@@ -245,34 +266,6 @@ export default function TeamForm({ initialData, isEditing = false }: TeamFormPro
       </div>
     );
   }
-
-  const handleFormSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    console.log('Form submission started...');
-    
-    try {
-      // Show loading toast
-      const loadingToast = toast.loading('Submitting team request...');
-      
-      // Call the onSubmit handler
-      await handleSubmit(async (data) => {
-        try {
-          console.log('Submitting data:', data);
-          await onSubmit(data);
-          toast.dismiss(loadingToast);
-          toast.success('Team request submitted! Awaiting mentor approval.');
-          router.push('/dashboard/student');
-        } catch (error: any) {
-          console.error('Submission error:', error);
-          toast.dismiss(loadingToast);
-          toast.error(error.message || 'Failed to submit team request');
-        }
-      })(e);
-    } catch (error: any) {
-      console.error('Form validation error:', error);
-      toast.error('Please check all required fields');
-    }
-  };
 
   // Add success state render
   if (isSubmitted) {
@@ -451,22 +444,53 @@ export default function TeamForm({ initialData, isEditing = false }: TeamFormPro
         )}
       </div>
 
-      <button
-        type="submit"
-        disabled={isLoading || !session?.user || Object.keys(errors).length > 0}
-        className="w-full bg-primary text-white py-2 px-4 rounded-md hover:bg-primary-dark transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
-      >
-        {isLoading ? (
-          <>
-            <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
-            <span>Submitting...</span>
-          </>
-        ) : isEditing ? (
-          'Update Team'
-        ) : (
-          'Create Team'
+      <div className="mt-6">
+        {/* Debug info in development */}
+        {process.env.NODE_ENV !== 'production' && (
+          <pre className="mb-4 p-4 bg-gray-100 rounded text-xs">
+            {JSON.stringify({
+              isValid: Object.keys(errors).length === 0,
+              hasSession: !!session?.user,
+              isLoading,
+              isEditing,
+              memberCount: members.length
+            }, null, 2)}
+          </pre>
         )}
-      </button>
+
+        <button
+          type="submit"
+          disabled={isLoading || !session?.user || Object.keys(errors).length > 0}
+          className="w-full bg-primary text-white py-2 px-4 rounded-md hover:bg-primary-dark 
+                    transition-colors disabled:opacity-50 disabled:cursor-not-allowed
+                    flex items-center justify-center gap-2"
+        >
+          {isLoading ? (
+            <>
+              <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+              <span>Submitting...</span>
+            </>
+          ) : isEditing ? (
+            'Update Team'
+          ) : (
+            'Create Team'
+          )}
+        </button>
+
+        {/* Show validation errors summary */}
+        {Object.keys(errors).length > 0 && (
+          <div className="mt-4 p-4 bg-red-50 border border-red-200 rounded-md">
+            <p className="text-red-600 font-medium">Please fix the following errors:</p>
+            <ul className="mt-2 list-disc list-inside">
+              {Object.entries(errors).map(([key, error]: [string, any]) => (
+                <li key={key} className="text-red-500">
+                  {error.message || `Invalid ${key}`}
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+      </div>
     </form>
   );
 }

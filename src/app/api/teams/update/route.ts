@@ -2,7 +2,6 @@ import { NextResponse } from 'next/server';
 import { auth } from '@/lib/auth';
 import prisma from '@/lib/db/prisma';
 import { z } from 'zod';
-import { hash } from 'bcryptjs';
 
 const updateTeamSchema = z.object({
   projectTitle: z.string().min(5),
@@ -35,7 +34,7 @@ export async function PUT(req: Request) {
 
     const data = validation.data;
 
-    // Find existing rejected team
+    // First find the team outside the transaction
     const existingTeam = await prisma.team.findFirst({
       where: {
         status: 'REJECTED',
@@ -45,6 +44,9 @@ export async function PUT(req: Request) {
             role: 'LEADER'
           }
         }
+      },
+      include: {
+        members: true
       }
     });
 
@@ -55,37 +57,19 @@ export async function PUT(req: Request) {
       }, { status: 404 });
     }
 
-    // Update team in transaction
+    // Now do the update in a single transaction
     const result = await prisma.$transaction(async (tx) => {
-      // Delete existing non-leader members
+      // First delete existing members
       await tx.teamMember.deleteMany({
         where: {
-          teamId: existingTeam.id,
-          role: 'MEMBER'
+          AND: [
+            { teamId: existingTeam.id },
+            { role: 'MEMBER' }
+          ]
         }
       });
 
-      // Create or connect users first
-      const memberUsers = await Promise.all(
-        data.members.map(async (member) => {
-          const defaultPassword = await hash(member.rollNumber, 12);
-          return tx.user.upsert({
-            where: { email: member.email },
-            update: {},
-            create: {
-              email: member.email,
-              firstName: member.name.split(' ')[0],
-              lastName: member.name.split(' ').slice(1).join(' ') || '',
-              password: defaultPassword,
-              role: 'STUDENT',
-              isRegistered: true,
-              canLogin: true
-            }
-          });
-        })
-      );
-
-      // Update team
+      // Then update the team and create new members
       const updatedTeam = await tx.team.update({
         where: { id: existingTeam.id },
         data: {
@@ -94,15 +78,17 @@ export async function PUT(req: Request) {
           status: 'PENDING',
           mentorId: data.mentorId,
           members: {
-            createMany: {
-              data: data.members.map((member, index) => ({
-                userId: memberUsers[index].id,
-                email: member.email,
-                name: member.name,
-                rollNumber: member.rollNumber,
-                role: 'MEMBER'
-              }))
-            }
+            create: data.members.map(member => ({
+              name: member.name,
+              email: member.email,
+              rollNumber: member.rollNumber,
+              role: 'MEMBER',
+              user: {
+                connect: {
+                  email: member.email
+                }
+              }
+            }))
           }
         },
         include: {
@@ -122,6 +108,9 @@ export async function PUT(req: Request) {
       });
 
       return updatedTeam;
+    }, {
+      maxWait: 5000, // 5 seconds max wait time
+      timeout: 10000 // 10 seconds timeout
     });
 
     return NextResponse.json({
@@ -131,6 +120,15 @@ export async function PUT(req: Request) {
 
   } catch (error) {
     console.error('Error updating team:', error);
+    
+    // Handle specific Prisma errors
+    if (error.code === 'P2028') {
+      return NextResponse.json({
+        success: false,
+        error: 'Transaction failed, please try again'
+      }, { status: 500 });
+    }
+
     return NextResponse.json({
       success: false,
       error: 'Failed to update team'
