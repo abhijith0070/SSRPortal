@@ -54,7 +54,7 @@ export async function PUT(req: Request) {
     if (!existingTeam) {
       return NextResponse.json({
         success: false,
-        error: 'No rejected team found'
+        error: 'No Rejected team found'
       }, { status: 404 });
     }
 
