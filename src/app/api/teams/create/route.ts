@@ -13,8 +13,69 @@ export async function POST(req: Request) {
     const data = await req.json();
     console.log('Received data:', data);
 
+    // Validate required fields
+    if (!data.projectTitle || !data.projectPillar || !data.batch || !data.teamNumber || !data.mentorId) {
+      return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
+    }
+
+    if (!data.members || !Array.isArray(data.members) || data.members.length < 3) {
+      return NextResponse.json({ error: 'At least 3 team members required' }, { status: 400 });
+    }
+
     const result = await prisma.$transaction(async (tx) => {
-      // Create team using schema structure
+      // First, check if team number already exists
+      const existingTeam = await tx.team.findUnique({
+        where: { teamNumber: data.teamNumber }
+      });
+
+      if (existingTeam) {
+        throw new Error('Team number already exists');
+      }
+
+      // Check if user already has a team
+      const existingUserTeam = await tx.team.findFirst({
+        where: { leadId: session.user.id }
+      });
+
+      if (existingUserTeam) {
+        throw new Error('You already have a team');
+      }
+
+      // Create or find users for team members first
+      const memberUsers = await Promise.all(
+        data.members.map(async (member: any) => {
+          // Check if user already exists
+          let user = await tx.user.findUnique({
+            where: { email: member.email }
+          });
+
+          if (!user) {
+            // Create new user if doesn't exist
+            const nameParts = member.name.trim().split(' ');
+            const firstName = nameParts[0] || '';
+            const lastName = nameParts.slice(1).join(' ') || '';
+
+            user = await tx.user.create({
+              data: {
+                firstName,
+                lastName,
+                email: member.email,
+                password: '', // Temporary password - should be handled by auth system
+                mID: member.rollNumber,
+                isRegistered: false,
+                canLogin: false
+              }
+            });
+          }
+
+          return {
+            user,
+            memberData: member
+          };
+        })
+      );
+
+      // Create the team
       const team = await tx.team.create({
         data: {
           projectTitle: data.projectTitle,
@@ -22,55 +83,33 @@ export async function POST(req: Request) {
           status: 'PENDING',
           batch: data.batch,
           teamNumber: data.teamNumber,
-          lead: {
-            connect: {
-              id: session.user.id
-            }
-          },
-          mentor: data.mentorId ? {
-            connect: {
-              id: data.mentorId
-            }
-          } : undefined
+          leadId: session.user.id,
+          mentorId: data.mentorId
         }
       });
 
-      // Create team members including leader
+      // Create team members
       const teamMembers = await Promise.all([
-        // Create leader member
+        // Create leader member entry
         tx.teamMember.create({
           data: {
-            team: {
-              connect: { id: team.id }
-            },
-            user: {
-              connect: { id: session.user.id }
-            },
+            teamId: team.id,
+            userId: session.user.id,
             name: `${session.user.firstName} ${session.user.lastName}`,
             email: session.user.email!,
-            rollNumber: session.user.mID || undefined,
+            rollNumber: session.user.mID || session.user.rollNumber || '',
             role: 'LEADER'
           }
         }),
-        // Create other members
-        ...data.members.map((member: any) =>
+        // Create other team member entries
+        ...memberUsers.map(({ user, memberData }) =>
           tx.teamMember.create({
             data: {
-              team: {
-                connect: { id: team.id }
-              },
-              user: {
-                create: {
-                  firstName: member.name.split(' ')[0],
-                  lastName: member.name.split(' ')[1] || '',
-                  email: member.email,
-                  password: '', // Temporary password
-                  mID: member.rollNumber
-                }
-              },
-              name: member.name,
-              email: member.email,
-              rollNumber: member.rollNumber,
+              teamId: team.id,
+              userId: user.id,
+              name: memberData.name,
+              email: memberData.email,
+              rollNumber: memberData.rollNumber,
               role: 'MEMBER'
             }
           })
@@ -81,6 +120,9 @@ export async function POST(req: Request) {
         team,
         members: teamMembers
       };
+    }, {
+      maxWait: 10000, // 10 seconds
+      timeout: 15000, // 15 seconds
     });
 
     return NextResponse.json({
@@ -91,10 +133,39 @@ export async function POST(req: Request) {
   } catch (error: any) {
     console.error('Error in team creation:', error);
     
+    // Handle specific Prisma errors
     if (error.code === 'P2002') {
+      const target = error.meta?.target;
+      if (target?.includes('teamNumber')) {
+        return NextResponse.json(
+          { error: 'Team number already exists' },
+          { status: 409 }
+        );
+      }
+      if (target?.includes('email')) {
+        return NextResponse.json(
+          { error: 'A user with this email already exists in another team' },
+          { status: 409 }
+        );
+      }
       return NextResponse.json(
-        { error: 'Team number already exists' },
+        { error: 'Duplicate entry detected' },
         { status: 409 }
+      );
+    }
+
+    if (error.code === 'P2025') {
+      return NextResponse.json(
+        { error: 'Referenced record not found (mentor may not exist)' },
+        { status: 404 }
+      );
+    }
+
+    // Handle transaction timeout
+    if (error.message?.includes('Transaction')) {
+      return NextResponse.json(
+        { error: 'Request timeout. Please try again.' },
+        { status: 408 }
       );
     }
 
