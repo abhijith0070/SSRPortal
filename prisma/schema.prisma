@@ -38,20 +38,20 @@ model User {
   firstName     String
   lastName      String
   password      String
-  email         String      @unique
+  email         String       @unique
   emailVerified DateTime?
   image         String?
-  isAdmin       Boolean     @default(false)
-  isStaff       Boolean     @default(false)
-  isRegistered  Boolean     @default(false)
-  canLogin      Boolean     @default(true)
+  isAdmin       Boolean      @default(false)
+  isStaff       Boolean      @default(false)
+  isRegistered  Boolean      @default(false)
+  canLogin      Boolean      @default(true)
   mID           String?
-  role          String      @default("STUDENT")
+  role          String       @default("STUDENT")
   accounts      Account[]
   Proposal      Proposal[]
   sessions      Session[]
-  team          Team?       @relation("User_lead")
-  mentees       Team[]      @relation("User_mentor")
+  team          Team?        @relation("User_lead")
+  mentees       Team[]       @relation("User_mentor")
   teamMembers   TeamMember[]
 }
 
@@ -65,26 +65,26 @@ model Team {
   leadId        String?      @unique
   teamNumber    String       @unique
   batch         String
+  createdAt     DateTime     @default(now())
+  updatedAt     DateTime     @updatedAt
   project       Project?
   proposals     Proposal[]
   lead          User?        @relation("User_lead", fields: [leadId], references: [id])
   mentor        User?        @relation("User_mentor", fields: [mentorId], references: [id])
-  createdAt     DateTime     @default(now())
-  updatedAt     DateTime     @updatedAt
   members       TeamMember[]
 }
 
 model TeamMember {
-  id        String   @id @default(cuid())
-  teamId    String
-  userId    String
-  joinedAt  DateTime @default(now())
-  role      String   @default("MEMBER") // Can be "LEADER" or "MEMBER"
-  name      String   // Add this field
-  email     String   // Add this field
-  rollNumber String? // Add this field
-  team      Team     @relation(fields: [teamId], references: [id])
-  user      User     @relation(fields: [userId], references: [id])
+  id         String   @id @default(cuid())
+  teamId     String
+  userId     String
+  joinedAt   DateTime @default(now())
+  role       String   @default("MEMBER")
+  name       String
+  email      String
+  rollNumber String?
+  team       Team     @relation(fields: [teamId], references: [id])
+  user       User     @relation(fields: [userId], references: [id])
 
   @@unique([teamId, userId])
 }
@@ -98,21 +98,21 @@ model VerificationToken {
 }
 
 model Proposal {
-  id                Int           @id @default(autoincrement())
+  id                Int       @id @default(autoincrement())
   title             String
   description       String
   content           String
   attachment        String?
   link              String?
-  created_at        DateTime      @default(now())
+  created_at        DateTime  @default(now())
   updated_at        DateTime
-  state             String        @default("DRAFT")  // Changed enum to String
+  state             String    @default("DRAFT")
   remarks           String?
   remark_updated_at DateTime?
   authorId          String
   teamCode          String?
-  author            User          @relation(fields: [authorId], references: [id])
-  Team              Team?         @relation(fields: [teamCode], references: [id])
+  author            User      @relation(fields: [authorId], references: [id])
+  Team              Team?     @relation(fields: [teamCode], references: [id])
 }
 
 model Project {
@@ -140,16 +140,3 @@ model Theme {
   description String?
   Project     Project[]
 }
-
-// Remove the enum and replace with a comment for documentation
-// Project Pillar Types:
-// - DRUG_AWARENESS
-// - CYBERSECURITY_AWARENESS
-// - HEALTH_AND_WELLBEING
-// - INDIAN_CULTURE_AND_HERITAGE
-// - SKILL_BUILDING
-// - ENVIRONMENTAL_INITIATIVES
-// - WOMEN_EMPOWERMENT
-// - PEER_MENTORSHIP
-// - TECHNICAL_PROJECTS
-// - FINANCIAL_LITERACY
