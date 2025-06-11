@@ -301,10 +301,26 @@ export default function TeamForm({ initialData, isEditing = false }: TeamFormPro
         {/* Batch and Team Number fields */}
         <div>
           <label className="block text-sm font-medium text-gray-700">Batch</label>
-          <select 
+          {/* <select 
             {...register('batch')}
             disabled={isEditing} // Disable for rejected teams
             className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-primary focus:ring-primary disabled:bg-gray-100"
+          >
+            <option value="">Select a batch</option>
+            {batchOptions.map(batch => (
+              <option key={batch.label} value={batch.label}>{batch.label}</option>
+            ))}
+          </select> */}
+           <select
+            className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-primary focus:ring-primary"
+            value={selectedBatch}
+            {...register('batch')}
+            disabled={isEditing} // Disable for rejected teams
+            onChange={e => {
+              setSelectedBatch(e.target.value);
+              setValue('batch', e.target.value);
+              setValue('teamNumber', ''); // reset team number when batch changes
+            }}
           >
             <option value="">Select a batch</option>
             {batchOptions.map(batch => (
@@ -316,7 +332,7 @@ export default function TeamForm({ initialData, isEditing = false }: TeamFormPro
           )}
         </div>
 
-        <div>
+        {/* <div>
           <label className="block text-sm font-medium text-gray-700">Team Number</label>
           <input
             type="text"
@@ -324,6 +340,25 @@ export default function TeamForm({ initialData, isEditing = false }: TeamFormPro
             disabled={isEditing} // Disable for rejected teams
             className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-primary focus:ring-primary disabled:bg-gray-100"
           />
+          {errors.teamNumber && (
+            <p className="mt-1 text-sm text-red-600">{errors.teamNumber.message}</p>
+          )}
+        </div>   */}
+         <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">Team Number</label>
+          <select
+            className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-primary focus:ring-primary"
+            {...register('teamNumber')}
+            value={watch('teamNumber')}
+            onChange={e => setValue('teamNumber', e.target.value)}
+            disabled={!selectedBatch || isEditing} // Disable if no batch selected or editing rejected team
+
+          >
+            <option value="">{selectedBatch ? 'Select a team number' : 'Select a batch first'}</option>
+            {filteredTeamOptions.map(team => (
+              <option key={team} value={team}>{team}</option>
+            ))}
+          </select>
           {errors.teamNumber && (
             <p className="mt-1 text-sm text-red-600">{errors.teamNumber.message}</p>
           )}
