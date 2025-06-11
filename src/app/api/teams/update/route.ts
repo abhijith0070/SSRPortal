@@ -23,8 +23,9 @@ export async function PUT(req: Request) {
     }
 
     const body = await req.json();
-    const validation = updateTeamSchema.safeParse(body);
+    console.log('Received update data:', body);
     
+    const validation = updateTeamSchema.safeParse(body);
     if (!validation.success) {
       return NextResponse.json({
         success: false,
@@ -34,7 +35,7 @@ export async function PUT(req: Request) {
 
     const data = validation.data;
 
-    // First find the team outside the transaction
+    // Find the team first
     const existingTeam = await prisma.team.findFirst({
       where: {
         status: 'REJECTED',
@@ -57,39 +58,56 @@ export async function PUT(req: Request) {
       }, { status: 404 });
     }
 
-    // Now do the update in a single transaction
+    // Update in transaction
     const result = await prisma.$transaction(async (tx) => {
-      // First delete existing members
+      // Delete existing non-leader members
       await tx.teamMember.deleteMany({
         where: {
-          AND: [
-            { teamId: existingTeam.id },
-            { role: 'MEMBER' }
-          ]
+          teamId: existingTeam.id,
+          role: 'MEMBER'
         }
       });
 
-      // Then update the team and create new members
+      // Create new members one by one
+      const newMembers = [];
+      for (const member of data.members) {
+        // Find or create user
+        const user = await tx.user.upsert({
+          where: { email: member.email },
+          update: {},
+          create: {
+            email: member.email,
+            firstName: member.name.split(' ')[0],
+            lastName: member.name.split(' ').slice(1).join(' ') || '',
+            password: '', // Will be set during registration
+            role: 'STUDENT',
+            isRegistered: false,
+            canLogin: true
+          }
+        });
+
+        // Create team member
+        const teamMember = await tx.teamMember.create({
+          data: {
+            teamId: existingTeam.id,
+            userId: user.id,
+            name: member.name,
+            email: member.email,
+            rollNumber: member.rollNumber,
+            role: 'MEMBER'
+          }
+        });
+        newMembers.push(teamMember);
+      }
+
+      // Update team
       const updatedTeam = await tx.team.update({
         where: { id: existingTeam.id },
         data: {
           projectTitle: data.projectTitle,
           projectPillar: data.projectPillar,
           status: 'PENDING',
-          mentorId: data.mentorId,
-          members: {
-            create: data.members.map(member => ({
-              name: member.name,
-              email: member.email,
-              rollNumber: member.rollNumber,
-              role: 'MEMBER',
-              user: {
-                connect: {
-                  email: member.email
-                }
-              }
-            }))
-          }
+          mentorId: data.mentorId
         },
         include: {
           members: {
@@ -107,31 +125,34 @@ export async function PUT(req: Request) {
         }
       });
 
-      return updatedTeam;
+      return {
+        ...updatedTeam,
+        members: [...updatedTeam.members, ...newMembers]
+      };
     }, {
-      maxWait: 5000, // 5 seconds max wait time
-      timeout: 10000 // 10 seconds timeout
+      maxWait: 10000,
+      timeout: 20000
     });
 
+    console.log('Team updated successfully:', result);
     return NextResponse.json({
       success: true,
       data: result
     });
 
-  } catch (error) {
+  } catch (error: any) {
     console.error('Error updating team:', error);
     
-    // Handle specific Prisma errors
-    if (error.code === 'P2028') {
+    if (error.code === 'P2002') {
       return NextResponse.json({
         success: false,
-        error: 'Transaction failed, please try again'
-      }, { status: 500 });
+        error: 'Member already exists in another team'
+      }, { status: 409 });
     }
 
     return NextResponse.json({
       success: false,
-      error: 'Failed to update team'
+      error: error.message || 'Failed to update team'
     }, { status: 500 });
   }
 }
