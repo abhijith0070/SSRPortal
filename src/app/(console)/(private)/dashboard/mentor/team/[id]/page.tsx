@@ -150,6 +150,7 @@ export default async function TeamDetailPage({ params }: { params: { id: string 
                       {member.user.firstName} {member.user.lastName}
                     </p>
                     <p className="text-sm text-gray-600">{member.user.email}</p>
+                    
                   </div>
                 ))
               }

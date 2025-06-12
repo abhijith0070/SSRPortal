@@ -53,16 +53,17 @@ export default function MentorDashboard() {
     <div className="p-6">
       <h1 className="text-2xl font-bold mb-6">Mentor Dashboard</h1>
       
-      {/* Teams Overview */}
       <div className="mb-8">
         <h2 className="text-xl font-semibold mb-4">Your Teams</h2>
         <div className="grid grid-cols-1 gap-4">
           {teams.length > 0 ? (
             teams.map((team) => (
-              <div key={team.code} className="bg-white rounded-lg shadow p-6">
+              <div key={team.id} className="bg-white rounded-lg shadow p-6">
                 <div className="flex justify-between items-start mb-4">
                   <div>
-                    <h3 className="text-lg font-semibold">Team {team.code}</h3>
+                    <h3 className="text-lg font-semibold">
+                      Team {team.teamNumber}
+                    </h3>
                     <p className="text-sm text-gray-500">
                       {team.stats.members} members · {team.stats.proposals} proposals
                     </p>
@@ -74,12 +75,12 @@ export default function MentorDashboard() {
                 
                 {/* Team Actions */}
                 <div className="flex gap-2 mt-4">
-                 <Link 
-                 href={`/dashboard/mentor/teams/${team.code}`}
-                 className="px-4 py-2 text-sm bg-primary text-white rounded-lg hover:bg-primary/90 transition-colors"
-                >
-                View Details
-               </Link>
+                  <Link 
+                    href={`/dashboard/mentor/teams/${team.id}`}
+                    className="px-4 py-2 text-sm bg-primary text-white rounded-lg hover:bg-primary/90 transition-colors"
+                  >
+                    View Details
+                  </Link>
                   {team.stats.status === 'PROPOSAL_SUBMISSION' && (
                     <button
                       onClick={() => router.push(`/dashboard/mentor/teams/${team.code}/proposals`)}

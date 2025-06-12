@@ -32,24 +32,18 @@ export async function GET() {
             theme: true
           }
         },
-        proposals: {
-          select: {
-            id: true,
-            title: true,
-            state: true,
-            updated_at: true
-          }
-        }
+        proposals: true
       },
       orderBy: {
         createdAt: 'desc'
       }
     });
 
-    // Transform the data to match the ITeam interface
+    // Transform the data correctly
     const transformedTeams = teams.map(team => ({
+      id: team.id,
+      teamNumber: team.teamNumber, // Use teamNumber directly
       code: team.id,
-      name: team.projectTitle,
       projectTitle: team.projectTitle,
       status: team.status,
       stats: {
@@ -74,12 +68,10 @@ export async function GET() {
       } : null
     }));
 
+    console.log('Transformed teams:', transformedTeams); // Debug log
     return NextResponse.json(transformedTeams);
   } catch (error) {
     console.error('Error fetching mentor teams:', error);
-    return NextResponse.json(
-      { error: 'Failed to fetch teams' },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: 'Failed to fetch teams' }, { status: 500 });
   }
-} 
+}
