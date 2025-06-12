@@ -63,6 +63,7 @@ export interface ITeam {
   project: IProject | null;
   stats: {
     proposals: number;
+    teamNumber: string;
     members: number;
     status: TEAM_STATUS;
   }

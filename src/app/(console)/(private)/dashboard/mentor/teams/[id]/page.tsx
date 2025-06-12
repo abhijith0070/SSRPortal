@@ -1,6 +1,9 @@
 import { redirect } from 'next/navigation';
 import { auth } from '@/lib/auth';
 import prisma from '@/lib/db/prisma';
+import UpdateTeamForm from '../updateteamform';
+import Link from 'next/link';
+import { Edit } from 'lucide-react';
 
 async function getTeamDetails(id: string) {
   const session = await auth();
@@ -121,6 +124,22 @@ export default async function TeamDetailPage({ params }: { params: { id: string 
             </span>
           </div>
         </div>
+        
+        {/* Update Team Form */}
+        <Link
+        href={`/dashboard/mentor/teams/edit/${team.id}`}
+        className="bg-blue-500 rounded-md w-fit px-4 py-2 flex items-center gap-2 hover:bg-blue-600 transition-colors text-white"
+        title="Edit Team"
+            >
+
+
+        <Edit  className='text-white'/>
+              
+       
+         <span className='text-white'>Edit Team</span>
+        
+            </Link>
+   
 
         {/* Team Members */}
         <div className="bg-white p-6 rounded-lg shadow">
