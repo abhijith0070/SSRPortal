@@ -24,6 +24,28 @@ function determineUserRole(email: string): { role: string; isStaff: boolean; isA
   }
   return { role: 'STUDENT', isStaff: false, isAdmin: false };
 }
+function validateAmritaStudentEmail(email: string): boolean {
+  if (!email.endsWith('@am.students.amrita.edu')) return false;
+
+  const username = email.split('@')[0];
+  const parts = username.split('.');
+
+  if (parts.length !== 3) return false;
+
+  const [campus, school, program] = parts;
+  const validCampuses = ['am', 'cb', 'bl', 'ch'];
+  const validSchools = ['en', 'sc', 'ai', 'bt'];
+  const programPattern = /^[a-z]\d[a-z]{2,}(\d{5})?$/;
+
+  return validCampuses.includes(campus) &&
+         validSchools.includes(school) &&
+         programPattern.test(program);
+}
+
+function extractStudentRollNo(email: string): string | null {
+  if (!validateAmritaStudentEmail(email)) return null;
+  return email.split('@')[0].toUpperCase();
+}
 
 export async function POST(request: Request) {
   console.log('🔍 Registration API called');
@@ -109,6 +131,7 @@ export async function POST(request: Request) {
         received: Object.keys(body)
       }, { status: 400 });
     }
+    
 
     // Test 6: Email validation
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -116,6 +139,19 @@ export async function POST(request: Request) {
       console.log('❌ Invalid email format:', body.email);
       return NextResponse.json({ error: 'Invalid email format' }, { status: 400 });
     }
+    // Student roll number extraction
+    if (body.email.endsWith('@am.students.amrita.edu')) {
+      if (!validateAmritaStudentEmail(body.email)) {
+        return NextResponse.json({
+          error: 'Invalid Amrita student email format. Use: campus.school.program@am.students.amrita.edu'
+        }, { status: 400 });
+      }
+    }
+    const rollNo = extractStudentRollNo(body.email);
+      if (rollNo) {
+        body.rollno = rollNo;
+        console.log('✅ Student roll number extracted:', rollNo);
+      }
 
     // Test 7: Check for existing user
     let existingUser;
@@ -176,6 +212,7 @@ export async function POST(request: Request) {
           firstName: body.firstName,
           lastName: body.lastName,
           email: body.email,
+          rollno: body.rollno || null, // Ensure rollno is optional
           password: hashedPassword,
           role: role,
           isRegistered: true,
@@ -215,7 +252,8 @@ export async function POST(request: Request) {
         email: user.email,
         firstName: user.firstName,
         lastName: user.lastName,
-        role: user.role
+        role: user.role,
+        rollno: user.rollno // Add this line
       }
     }, { status: 201 });
 

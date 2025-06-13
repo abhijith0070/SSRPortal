@@ -39,6 +39,7 @@ model User {
   lastName      String
   password      String
   email         String       @unique
+  rollno        String?       @unique 
   emailVerified DateTime?
   image         String?
   isAdmin       Boolean      @default(false)

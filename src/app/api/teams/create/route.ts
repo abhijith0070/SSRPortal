@@ -23,6 +23,21 @@ export async function POST(req: Request) {
     }
 
     const result = await prisma.$transaction(async (tx) => {
+      // Get leader's full data from database
+      const leaderUser = await tx.user.findUnique({
+        where: { id: session.user.id }
+      });
+
+      if (!leaderUser) {
+        throw new Error('Team leader not found');
+      }
+
+      console.log('🔍 Leader user from database:', {
+        id: leaderUser.id,
+        email: leaderUser.email,
+        rollno: leaderUser.rollno // This should show CH.SC.U4CSE22064
+      });
+
       // First, check if team number already exists
       const existingTeam = await tx.team.findUnique({
         where: { teamNumber: data.teamNumber }
@@ -61,7 +76,7 @@ export async function POST(req: Request) {
                 lastName,
                 email: member.email,
                 password: '', // Temporary password - should be handled by auth system
-                mID: member.rollNumber,
+                rollno: member.rollNumber,
                 isRegistered: false,
                 canLogin: false
               }
@@ -88,16 +103,16 @@ export async function POST(req: Request) {
         }
       });
 
-      // Create team members
+      // Create team members using database data
       const teamMembers = await Promise.all([
-        // Create leader member entry
+        // Create leader member entry using DATABASE data
         tx.teamMember.create({
           data: {
             teamId: team.id,
-            userId: session.user.id,
-            name: `${session.user.firstName} ${session.user.lastName}`,
-            email: session.user.email!,
-            rollNumber: session.user.mID || session.user.rollNumber || '',
+            userId: leaderUser.id,
+            name: `${leaderUser.firstName} ${leaderUser.lastName}`,
+            email: leaderUser.email,
+            rollNumber: leaderUser.rollno || '', // Use database rollno, not session
             role: 'LEADER'
           }
         }),

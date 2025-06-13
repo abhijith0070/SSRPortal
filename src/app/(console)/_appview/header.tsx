@@ -29,7 +29,7 @@ const Header = async () => {
                   <span className="ml-3 text-xl">SSR Connect</span>
               </Link>
               <div>
-                  <UserDropdown user={user} />
+                  <UserDropdown user={user ? { ...user, rollno: (user as any).rollno || '' } : null} />
               </div>
           </div>
       </header>

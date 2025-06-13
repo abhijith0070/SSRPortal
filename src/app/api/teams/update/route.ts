@@ -77,6 +77,7 @@ export async function PUT(req: Request) {
           update: {},
           create: {
             email: member.email,
+            rollno: member.rollNumber,
             firstName: member.name.split(' ')[0],
             lastName: member.name.split(' ').slice(1).join(' ') || '',
             password: '', // Will be set during registration
