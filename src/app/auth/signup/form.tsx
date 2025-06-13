@@ -62,7 +62,7 @@ const RegisterForm = () => {
   const onSubmit = async (formData: InputType) => {
     try {
       setIsLoading(true);
-      console.log('Attempting registration with:', formData.email);
+      console.log('Attempting registration with:', formData.firstName, formData.email, formData.email.split('@')[0].toUpperCase());
 
       const res = await fetch('/api/auth/register', {
         method: 'POST',
@@ -73,6 +73,7 @@ const RegisterForm = () => {
           firstName: formData.firstName,
           lastName: formData.lastName,
           email: formData.email,
+          rollno: formData.email.split('@')[0].toUpperCase(), // Assuming roll number is the part before '@'
           password: formData.password,
           role: 'STUDENT'
         }),

@@ -58,7 +58,13 @@ export interface ITeam {
   teamNumber: string;
   code: string;
   mentor: IUser;
-  members: [string, string][];
+  members: Array<{
+  id: string;
+  name: string;
+  email: string;
+  rollno?: string;
+  role?: 'LEADER' | 'MEMBER';
+}>;
   proposals: Omit<IProposal, 'proposalURL'>[];
   project: IProject | null;
   stats: {
