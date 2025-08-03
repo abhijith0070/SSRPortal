@@ -41,43 +41,49 @@ export default function StudentDashboard() {
       setIsLoading(true);
       setError(null);
 
+      if (!session?.user?.id) return;
+
       console.log('Fetching stats with session:', session);
-      const response = await fetch('/api/student/dashboard/stats');
-      const data = await response.json();
+      const response = await fetch(`/api/teams/user/${session.user.id}`);
       
-      console.log('Received project stats:', data); // Debug log
-
       if (!response.ok) {
-        throw new Error(data.error || 'Failed to fetch dashboard data');
+        throw new Error('Failed to fetch project stats');
       }
-
-      if (data === null) {
-        console.log('No team data found');
-        setProjectStats(null);
-      } else {
-        console.log('Setting project stats:', data);
-        setProjectStats(data);
+      
+      const teamData = await response.json();
+      
+      if (teamData) {
+        // Transform the team data to match your ProjectStats interface
+        const transformedStats = {
+          teamName: teamData.teamNumber || `Team ${teamData.teamNumber}`,
+          projectTitle: teamData.projectTitle,
+          status: teamData.status,
+          completedMilestones: 0,
+          totalMilestones: 10,
+          nextDeadline: 'TBD',
+          mentorName: teamData.mentor ? 
+            `${teamData.mentor.firstName} ${teamData.mentor.lastName}` : 
+            'Not assigned',
+          lastUpdate: 'Recently',
+          members: teamData.members, // This should already be correctly formatted
+          recentActivities: []
+        };
+        
+        setProjectStats(transformedStats);
       }
     } catch (error) {
-      console.error('Failed to fetch project stats:', error);
-      setError(error instanceof Error ? error.message : 'Failed to load dashboard data');
-      setProjectStats(null);
+      console.error('Error fetching project stats:', error);
+      setError('Failed to load project data');
     } finally {
       setIsLoading(false);
     }
   };
 
-  // Fetch data when session is available
   useEffect(() => {
-    if (sessionStatus === 'loading') return;
-    
-    if (!session?.user) {
-      router.push('/auth/student/signin');
-      return;
+    if (session?.user) {
+      fetchProjectStats();
     }
-
-    fetchProjectStats();
-  }, [session, sessionStatus, router]);
+  }, [session]);
 
   // Refresh data when the component becomes visible
   useEffect(() => {
