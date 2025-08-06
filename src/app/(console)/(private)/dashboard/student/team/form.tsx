@@ -46,10 +46,14 @@ const teamMemberSchema = z.object({
     }),
   rollNumber: z.string()
     .min(5, 'Invalid roll number')
-    .transform((val) => val.toUpperCase()),
+    .transform((val) => val.toUpperCase())
+    .refine((rollNumber) => rollNumber.length >= 5, {
+      message: 'Roll number must be at least 5 characters'
+    }),
 }).refine((data) => {
   const extractedRoll = extractStudentRollNo(data.email);
-  return extractedRoll === data.rollNumber;
+  if (!extractedRoll) return true; // Allow if email is invalid (will be caught by email validation)
+  return extractedRoll.toUpperCase() === data.rollNumber.toUpperCase();
 }, {
   message: 'Roll number must match the email address',
   path: ['rollNumber']
@@ -237,14 +241,17 @@ export default function TeamForm({ initialData, isEditing = false }: TeamFormPro
     }
   }, [initialData, isEditing, reset]);
 
+  // Watch the form's batch value
+  const watchedBatch = watch('batch');
+
   // Generate team numbers based on selected batch
   useEffect(() => {
-    if (!selectedBatch) {
+    if (!watchedBatch) {
       setAvailableTeamNumbers([]);
       return;
     }
 
-    const batch = BATCH_OPTIONS.find(b => b.label === selectedBatch);
+    const batch = BATCH_OPTIONS.find(b => b.label === watchedBatch);
     if (!batch) return;
 
     const [start, end] = batch.range;
@@ -254,7 +261,10 @@ export default function TeamForm({ initialData, isEditing = false }: TeamFormPro
     });
     
     setAvailableTeamNumbers(teamNumbers);
-  }, [selectedBatch]);
+    
+    // Update selectedBatch to keep UI in sync
+    setSelectedBatch(watchedBatch);
+  }, [watchedBatch]);
 
   // API calls
   const checkExistingUser = useCallback(async (email: string) => {
@@ -291,13 +301,16 @@ export default function TeamForm({ initialData, isEditing = false }: TeamFormPro
 
   // Event handlers
   const handleEmailChange = useCallback((index: number, email: string) => {
-    setValue(`members.${index}.email`, email.toLowerCase());
+    setValue(`members.${index}.email`, email.toLowerCase(), { shouldValidate: true });
     
     if (validateAmritaStudentEmail(email)) {
       const extractedRoll = extractStudentRollNo(email);
       if (extractedRoll) {
-        setValue(`members.${index}.rollNumber`, extractedRoll);
+        setValue(`members.${index}.rollNumber`, extractedRoll, { shouldValidate: true, shouldDirty: true });
       }
+    } else {
+      // Clear roll number if email is invalid
+      setValue(`members.${index}.rollNumber`, '', { shouldValidate: true });
     }
   }, [setValue]);
 
@@ -310,24 +323,32 @@ export default function TeamForm({ initialData, isEditing = false }: TeamFormPro
     // Check uniqueness
     const isUnique = await checkUniqueTeamMember(email, rollNumber);
     if (!isUnique) {
-      setValue(`members.${index}.email`, '');
-      setValue(`members.${index}.rollNumber`, '');
-      setValue(`members.${index}.name`, '');
+      setValue(`members.${index}.email`, '', { shouldValidate: true });
+      setValue(`members.${index}.rollNumber`, '', { shouldValidate: true });
+      setValue(`members.${index}.name`, '', { shouldValidate: true });
       return;
     }
 
     // Check existing user
     const existingUser = await checkExistingUser(email);
     if (existingUser) {
-      setValue(`members.${index}.name`, `${existingUser.firstName} ${existingUser.lastName}`.trim());
-      setValue(`members.${index}.rollNumber`, existingUser.rollno || rollNumber);
+      setValue(`members.${index}.name`, `${existingUser.firstName} ${existingUser.lastName}`.trim(), { shouldValidate: true });
+      setValue(`members.${index}.rollNumber`, (existingUser.rollno || rollNumber).toUpperCase(), { shouldValidate: true, shouldDirty: true });
     }
   }, [checkUniqueTeamMember, checkExistingUser, setValue]);
 
   const handleBatchChange = useCallback((batchValue: string) => {
     setSelectedBatch(batchValue);
-    setValue('batch', batchValue);
-    setValue('teamNumber', ''); // Reset team number when batch changes
+    setValue('batch', batchValue, { shouldValidate: true, shouldDirty: true });
+    setValue('teamNumber', '', { shouldValidate: true, shouldDirty: true });
+  }, [setValue]);
+
+  const handleTeamNumberChange = useCallback((teamNumber: string) => {
+    setValue('teamNumber', teamNumber, { shouldValidate: true, shouldDirty: true });
+  }, [setValue]);
+
+  const handleRollNumberChange = useCallback((index: number, rollNumber: string) => {
+    setValue(`members.${index}.rollNumber`, rollNumber.toUpperCase(), { shouldValidate: true, shouldDirty: true });
   }, [setValue]);
 
   const addMember = useCallback(() => {
@@ -496,8 +517,8 @@ export default function TeamForm({ initialData, isEditing = false }: TeamFormPro
               Batch *
             </label>
             <select
+              {...register('batch')}
               className="w-full rounded-md border-gray-300 shadow-sm focus:border-primary focus:ring-primary"
-              value={selectedBatch}
               disabled={isEditing}
               onChange={(e) => handleBatchChange(e.target.value)}
             >
@@ -519,10 +540,11 @@ export default function TeamForm({ initialData, isEditing = false }: TeamFormPro
             <select
               {...register('teamNumber')}
               className="w-full rounded-md border-gray-300 shadow-sm focus:border-primary focus:ring-primary"
-              disabled={!selectedBatch || isEditing}
+              disabled={!watchedBatch || isEditing}
+              onChange={(e) => handleTeamNumberChange(e.target.value)}
             >
               <option value="">
-                {selectedBatch ? 'Select a team number' : 'Select a batch first'}
+                {watchedBatch ? 'Select a team number' : 'Select a batch first'}
               </option>
               {availableTeamNumbers.map(team => (
                 <option key={team} value={team}>{team}</option>
@@ -581,7 +603,9 @@ export default function TeamForm({ initialData, isEditing = false }: TeamFormPro
                   <label className="block text-xs font-medium text-gray-600 mb-1">Roll Number</label>
                   <input
                     type="text"
-                    {...register(`members.${index}.rollNumber`)}
+                    {...register(`members.${index}.rollNumber`, {
+                      onChange: (e) => handleRollNumberChange(index, e.target.value)
+                    })}
                     placeholder="Auto-filled from email"
                     className="w-full rounded-md border-gray-300 shadow-sm focus:border-primary focus:ring-primary"
                   />
@@ -617,7 +641,7 @@ export default function TeamForm({ initialData, isEditing = false }: TeamFormPro
         {/* Error Summary */}
         {Object.keys(errors).length > 0 && (
           <div className="p-4 bg-red-50 border border-red-200 rounded-md">
-            <h3 className="text-red-800 font-medium mb-2">Please fix the following errors:</h3>
+            <h3 className="text-red-800 font-medium mb-2">Please fill the following fields:</h3>
             <ul className="space-y-1">
               {Object.entries(errors).map(([key, error]: [string, any]) => (
                 <li key={key} className="text-sm text-red-600">
