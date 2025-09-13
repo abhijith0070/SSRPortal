@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { writeFile, mkdir } from 'fs/promises';
 import { join } from 'path';
-import { auth } from '@auth';
+import { auth } from '@/lib/auth';
 
 const UPLOAD_DIR = join(process.cwd(), 'public', 'uploads');
 
@@ -22,15 +22,28 @@ export async function POST(req: Request) {
     }
 
     // Validate file type
-    const allowedTypes = ['application/pdf', 'image/jpeg', 'image/png', 'image/gif'];
+    const allowedTypes = [
+      'application/pdf',
+      'application/msword',
+      'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+      'application/vnd.ms-powerpoint',
+      'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+      'video/mp4',
+      'video/quicktime',
+      'video/x-msvideo',
+      'image/jpeg',
+      'image/jpg',
+      'image/png',
+      'image/gif'
+    ];
     if (!allowedTypes.includes(file.type)) {
-      return new NextResponse('Invalid file type. Only PDF and images are allowed.', { status: 400 });
+      return new NextResponse('Invalid file type. Supported: PDF, DOC, DOCX, PPT, PPTX, MP4, MOV, AVI, JPG, PNG, GIF', { status: 400 });
     }
 
     // Enforce size limit manually
-    const maxSize = 10 * 1024 * 1024; // 10MB
+    const maxSize = 50 * 1024 * 1024; // 50MB
     if (file.size > maxSize) {
-      return new NextResponse('File size exceeds the 10MB limit.', { status: 400 });
+      return new NextResponse('File size exceeds the 50MB limit.', { status: 400 });
     }
 
     // Generate unique filename

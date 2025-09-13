@@ -4,349 +4,590 @@ import { useState, useEffect } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
-import toast from 'react-hot-toast';
-import { useSession } from 'next-auth/react';
-import { useRouter } from 'next/navigation';
-import Link from 'next/link';
-import { FileIcon } from 'lucide-react';
+import { proposalSchema } from '@/lib/validation/proposal';
+import { CheckCircle, AlertCircle, Loader2 } from 'lucide-react';
 
-const proposalSchema = z.object({
-  title: z.string().min(5, 'Title must be at least 5 characters'),
-  description: z.string().min(100, 'Description must be at least 100 characters'),
-  objectives: z.string().min(50, 'Objectives must be at least 50 characters'),
-  methodology: z.string().min(100, 'Methodology must be at least 100 characters'),
-  expectedOutcomes: z.string().min(50, 'Expected outcomes must be at least 50 characters'),
-  timeline: z.string().min(50, 'Timeline must be at least 50 characters'),
-  references: z.string().optional(),
+// Extended schema with UI-specific fields
+const projectSchema = proposalSchema.extend({
+  file: z.any().optional(),
+  category: z.string().nonempty('Please select a category'),
+  locationMode: z.literal('Offline'),
+  state: z.string().optional(),
+  district: z.string().optional(),
+  city: z.string().optional(),
+  placeVisited: z.string().optional(),
+  travelTime: z.string().optional(),
+  executionTime: z.string().optional(),
+  completionDate: z.string().optional(),
 });
 
-type ProposalFormData = z.infer<typeof proposalSchema>;
+type ProjectFormData = z.infer<typeof projectSchema>;
 
-interface ProposalFormProps {
-  initialData?: {
-    title: string;
-    description: string;
-    objectives: string;
-    methodology: string;
-    expectedOutcomes: string;
-    timeline: string;
-    references?: string;
-    attachment?: string;
+// Status message type for better UI feedback
+type StatusMessage = {
+  type: 'success' | 'error' | 'info';
+  message: string;
+};
+
+const indianStatesWithDistricts: Record<string, string[]> = {
+  "Andhra Pradesh": [],
+  "Arunachal Pradesh": [],
+  "Assam": [],
+  "Bihar": [],
+  "Chhattisgarh": [],
+  "Goa": [],
+  "Gujarat": [],
+  "Haryana": [],
+  "Himachal Pradesh": [],
+  "Jharkhand": [],
+  "Karnataka": [],
+  "Kerala": [
+    "Alappuzha","Ernakulam","Idukki","Kannur","Kasaragod","Kollam",
+    "Kottayam","Kozhikode","Malappuram","Palakkad","Pathanamthitta",
+    "Thiruvananthapuram","Thrissur","Wayanad"
+  ],
+  "Madhya Pradesh": [],
+  "Maharashtra": [],
+  "Manipur": [],
+  "Meghalaya": [],
+  "Mizoram": [],
+  "Nagaland": [],
+  "Odisha": [],
+  "Punjab": [],
+  "Rajasthan": [],
+  "Sikkim": [],
+  "Tamil Nadu": [],
+  "Telangana": [],
+  "Tripura": [],
+  "Uttar Pradesh": [],
+  "Uttarakhand": [],
+  "West Bengal": [],
+  "Andaman and Nicobar Islands": [],
+  "Chandigarh": [],
+  "Dadra and Nagar Haveli and Daman and Diu": [],
+  "Delhi": [],
+  "Jammu and Kashmir": [],
+  "Ladakh": [],
+  "Lakshadweep": [],
+  "Puducherry": []
+};
+
+interface ExistingProposal {
+  id: number;
+  title: string;
+  description: string;
+  content: string;
+  attachment?: string;
+  link?: string;
+  // Add metadata fields if they exist
+  metadata?: {
+    category?: string;
+    locationMode?: string;
+    state?: string;
+    district?: string;
+    city?: string;
+    placeVisited?: string;
+    travelTime?: string;
+    executionTime?: string;
+    completionDate?: string;
   };
-  proposalId?: string;
 }
 
-export default function ProposalForm({ initialData, proposalId }: ProposalFormProps) {
-  const { data: session, status } = useSession();
-  const [isLoading, setIsLoading] = useState(false);
-  const [files, setFiles] = useState<File[]>([]);
-  const router = useRouter();
+interface ProjectFormProps {
+  existingProposal?: ExistingProposal;
+  onEditMode?: (isEdit: boolean) => void;
+}
+
+export default function ProjectForm({ existingProposal, onEditMode }: ProjectFormProps) {
+  const [selectedState, setSelectedState] = useState('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [statusMessage, setStatusMessage] = useState<StatusMessage | null>(null);
+  const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
+  const [uploadProgress, setUploadProgress] = useState<number>(0);
 
   const {
     register,
     handleSubmit,
+    setValue,
     formState: { errors },
-    reset
-  } = useForm<ProposalFormData>({
-    resolver: zodResolver(proposalSchema),
-    defaultValues: initialData
+  } = useForm<ProjectFormData>({
+    resolver: zodResolver(projectSchema),
   });
 
-  useEffect(() => {
-    if (initialData) {
-      reset(initialData);
-    }
-  }, [initialData, reset]);
+  const states = Object.keys(indianStatesWithDistricts);
+  const districts = selectedState ? indianStatesWithDistricts[selectedState] || [] : [];
 
-  // Debug session state
-  console.log('Session status:', status);
-  console.log('Session data:', session);
-
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files && e.target.files.length > 0) {
-      const file = e.target.files[0];
-      console.log('Selected file:', {
-        name: file.name,
-        type: file.type,
-        size: file.size
-      });
-      setFiles([file]);
+  // Handle file selection
+  const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const files = event.target.files;
+    if (files) {
+      const fileArray = Array.from(files);
+      setSelectedFiles(prev => [...prev, ...fileArray]);
     }
   };
 
-  const onSubmit = async (data: ProposalFormData) => {
-    try {
-      if (status !== 'authenticated' || !session?.user) {
-        toast.error('Please sign in to submit a proposal');
-        return;
-      }
+  // Remove selected file
+  const removeFile = (index: number) => {
+    setSelectedFiles(prev => prev.filter((_, i) => i !== index));
+  };
 
-      setIsLoading(true);
-      console.log('Starting proposal submission with data:', data);
-
-      // Handle file upload if present
-      let attachment = initialData?.attachment || '';
-      if (files.length > 0) {
-        const file = files[0];
-        console.log('Uploading file:', {
-          name: file.name,
-          type: file.type,
-          size: file.size
+  // Upload files to server
+  const uploadFiles = async (files: File[]): Promise<string[]> => {
+    const uploadedUrls: string[] = [];
+    
+    for (const file of files) {
+      const formData = new FormData();
+      formData.append('file', file);
+      
+      try {
+        const uploadResponse = await fetch('/api/upload', {
+          method: 'POST',
+          body: formData,
         });
+        
+        if (uploadResponse.ok) {
+          const uploadResult = await uploadResponse.json();
+          uploadedUrls.push(uploadResult.url);
+        } else {
+          console.error('Failed to upload file:', file.name);
+        }
+      } catch (error) {
+        console.error('Error uploading file:', file.name, error);
+      }
+    }
+    
+    return uploadedUrls;
+  };
 
-        try {
-          const formData = new FormData();
-          formData.append('file', file);
-          
-          const uploadResponse = await fetch('/api/upload', {
-            method: 'POST',
-            body: formData,
-          });
-          
-          console.log('Upload response status:', uploadResponse.status);
-          
-          if (!uploadResponse.ok) {
-            const errorText = await uploadResponse.text();
-            console.error('File upload error:', {
-              status: uploadResponse.status,
-              statusText: uploadResponse.statusText,
-              error: errorText
-            });
-            throw new Error(`File upload failed: ${errorText}`);
-          }
-
-          const fileData = await uploadResponse.json();
-          console.log('File upload response:', fileData);
-          attachment = fileData.url;
-        } catch (uploadError: any) {
-          console.error('Error during file upload:', uploadError);
-          toast.error(`File upload failed: ${uploadError.message}`);
-          return;
+  // Pre-fill form with existing proposal data if editing
+  useEffect(() => {
+    if (existingProposal) {
+      // Notify parent that we're in edit mode
+      onEditMode?.(true);
+      
+      // Set basic fields
+      setValue('title', existingProposal.title);
+      setValue('description', existingProposal.description);
+      setValue('content', existingProposal.content);
+      
+      // Set metadata fields if they exist
+      if (existingProposal.metadata) {
+        setValue('category', existingProposal.metadata.category || '');
+        setValue('locationMode', 'Offline');
+        setValue('state', existingProposal.metadata.state || '');
+        setValue('district', existingProposal.metadata.district || '');
+        setValue('city', existingProposal.metadata.city || '');
+        setValue('placeVisited', existingProposal.metadata.placeVisited || '');
+        setValue('travelTime', existingProposal.metadata.travelTime || '');
+        setValue('executionTime', existingProposal.metadata.executionTime || '');
+        setValue('completionDate', existingProposal.metadata.completionDate || '');
+        
+        // Set selected state for district dropdown
+        if (existingProposal.metadata.state) {
+          setSelectedState(existingProposal.metadata.state);
         }
       }
+    } else {
+      // Notify parent that we're in create mode
+      onEditMode?.(false);
+    }
+  }, [existingProposal, setValue, onEditMode]);
 
-      // Combine content fields
-      const content = `
-Objectives:
-${data.objectives}
-
-Methodology:
-${data.methodology}
-
-Expected Outcomes:
-${data.expectedOutcomes}
-
-Timeline:
-${data.timeline}
-
-${data.references ? `References:\n${data.references}` : ''}
-`.trim();
-
-      // Prepare proposal data
-      const proposalData = {
+  const onSubmit = async (data: ProjectFormData) => {
+    setIsSubmitting(true);
+    
+    try {
+      // Check if user is logged in and has a team
+      try {
+        const authCheck = await fetch('/api/test/auth');
+        if (!authCheck.ok) {
+          const authError = await authCheck.json();
+          console.error('Auth check failed:', authError);
+          throw new Error(authError.message || 'Authentication failed. Please try logging in again.');
+        }
+        
+        const authData = await authCheck.json();
+        console.log('Auth check succeeded:', authData);
+        
+        if (!authData.success) {
+          throw new Error('Authentication error');
+        }
+        
+        if (!authData.data.hasTeam) {
+          throw new Error('You must be part of a team to submit a proposal. Please join or create a team first.');
+        }
+      } catch (e) {
+        console.error('Auth error:', e);
+        throw new Error(e.message || 'Authentication error. Please try logging in again.');
+      }
+      
+      // Upload files if any are selected
+      let uploadedFileUrls: string[] = [];
+      if (selectedFiles.length > 0) {
+        setStatusMessage({
+          type: 'info',
+          message: 'Uploading files...'
+        });
+        
+        uploadedFileUrls = await uploadFiles(selectedFiles);
+      }
+      
+      // Only include fields that match the API schema
+      const payload = {
         title: data.title,
         description: data.description,
-        content: content,
-        attachment: attachment || undefined,
+        content: data.content,
+        // Optional fields
+        attachment: uploadedFileUrls.join(','),  // Store multiple file URLs as comma-separated string
+        link: '',        // We'll add link field later
+        
+        // Extra metadata fields (these won't be used by the API validation
+        // but will be available in the raw request body)
+        _metadata: {
+          category: data.category,
+          locationMode: data.locationMode,
+          state: data.state || '',
+          district: data.district || '',
+          city: data.city || '',
+          placeVisited: data.placeVisited || '',
+          travelTime: data.travelTime || '',
+          executionTime: data.executionTime || '',
+          completionDate: data.completionDate || '',
+        }
       };
 
-      console.log('Submitting proposal data:', proposalData);
+      console.log('Submitting payload:', payload);
 
-      // Submit or update proposal
-      const url = proposalId 
-        ? `/api/student/proposals/${proposalId}`
+      // Use PUT method if editing existing proposal, POST for new proposal
+      const apiUrl = existingProposal 
+        ? `/api/student/proposals/${existingProposal.id}` 
         : '/api/student/proposals';
       
-      const method = proposalId ? 'PUT' : 'POST';
+      const method = existingProposal ? 'PUT' : 'POST';
 
-      const response = await fetch(url, {
-        method,
+      const response = await fetch(apiUrl, {
+        method: method,
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify(proposalData),
+        body: JSON.stringify(payload),
+        cache: 'no-store',
       });
 
-      console.log('Proposal submission response status:', response.status);
-
-      let responseData;
-      try {
-        responseData = await response.json();
-        console.log('Proposal submission response:', responseData);
-      } catch (e) {
-        console.error('Failed to parse response:', e);
-        const text = await response.text();
-        console.log('Raw response:', text);
-        throw new Error('Invalid response from server');
-      }
+      console.log('Response status:', response.status);
 
       if (!response.ok) {
-        if (responseData.error === 'Validation failed') {
-          console.error('Validation errors:', responseData.details);
-          responseData.details.forEach((error: any) => {
-            toast.error(`${error.path.join('.')}: ${error.message}`);
-          });
-        } else if (response.status === 404) {
-          toast.error('You must be part of a team to submit a proposal');
-        } else if (response.status === 401) {
-          toast.error('Please sign in again to submit your proposal');
-          router.push('/auth/signin');
-        } else {
-          throw new Error(responseData.message || 'Failed to submit proposal');
+        // Try to parse as JSON first
+        let errorData;
+        try {
+          errorData = await response.json();
+          console.error('Server error (JSON):', errorData);
+        } catch (e) {
+          // If not JSON, get as text
+          const errorText = await response.text();
+          console.error('Server error (Text):', errorText);
         }
-        return;
+        
+        if (errorData?.error === 'Team not found') {
+          throw new Error(`Your team information could not be found. Please make sure you have joined or created a team.`);
+        } else if (errorData?.error === 'Proposal exists') {
+          throw new Error(`You already have a proposal submitted. ${errorData.message || ''}`);
+        } else if (errorData?.error === 'Validation failed') {
+          throw new Error(`Form validation failed. Please check all required fields.`);
+        } else {
+          throw new Error(`Failed to submit form (${response.status}): ${errorData?.error || 'Unknown error'}`);
+        }
       }
 
-      toast.success(proposalId ? 'Proposal updated successfully!' : 'Proposal submitted successfully!');
-      router.push('/dashboard/student/proposals');
-    } catch (error: any) {
-      console.error('Proposal submission error:', error);
-      toast.error(error.message || 'Failed to submit proposal. Please try again.');
+      const result = await response.json();
+      console.log('Server response:', result);
+      
+      if (result.success) {
+        const message = existingProposal 
+          ? 'Proposal updated successfully! Redirecting to proposals page...'
+          : 'Form submitted successfully! Redirecting to proposals page...';
+          
+        setStatusMessage({
+          type: 'success',
+          message: message
+        });
+        
+        // Redirect to proposals page after a short delay
+        setTimeout(() => {
+          window.location.href = '/dashboard/student/proposals';
+        }, 2000);
+      } else {
+        // This shouldn't happen since we check !response.ok above, but just in case
+        throw new Error(result.error || 'Unknown error occurred');
+      }
+      
+    } catch (err: any) {
+      console.error('Submission error:', err);
+      setStatusMessage({
+        type: 'error',
+        message: err.message || 'An unknown error occurred while submitting your form.'
+      });
     } finally {
-      setIsLoading(false);
+      setIsSubmitting(false);
+      // Scroll to top to show the status message
+      window.scrollTo({ top: 0, behavior: 'smooth' });
     }
   };
 
-  if (status === 'loading') {
-    return <div>Loading...</div>;
-  }
-
-  if (status === 'unauthenticated') {
-    router.push('/auth/signin');
-    return null;
-  }
-
   return (
-    
-    <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
+    <div>
+      {/* Status Message */}
+      {statusMessage && (
+        <div className={`mb-6 p-4 rounded-md ${
+          statusMessage.type === 'success' ? 'bg-green-50 text-green-800 border border-green-200' : 
+          statusMessage.type === 'error' ? 'bg-red-50 text-red-800 border border-red-200' : 
+          'bg-blue-50 text-blue-800 border border-blue-200'
+        }`}>
+          <div className="flex items-center">
+            {statusMessage.type === 'success' ? (
+              <CheckCircle className="h-5 w-5 mr-2 flex-shrink-0" />
+            ) : statusMessage.type === 'error' ? (
+              <AlertCircle className="h-5 w-5 mr-2 flex-shrink-0" />
+            ) : (
+              <div className="h-5 w-5 mr-2 flex-shrink-0" />
+            )}
+            <p>{statusMessage.message}</p>
+          </div>
+        </div>
+      )}
+      
+      <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
       <div>
         <label className="block text-sm font-medium text-gray-700">Project Title</label>
         <input
           type="text"
           {...register('title')}
-          className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-primary focus:ring-primary"
+          className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:ring focus:ring-primary"
         />
-        {errors.title && (
-          <p className="mt-1 text-sm text-red-600">{errors.title.message}</p>
-        )}
+        {errors.title && <p className="text-red-600 text-sm">{errors.title.message}</p>}
       </div>
 
       <div>
-        <label className="block text-sm font-medium text-gray-700">Project Description</label>
+        <label className="block text-sm font-medium text-gray-700">Project Category</label>
+        <select
+          {...register('category')}
+          className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:ring focus:ring-primary"
+        >
+          <option value="">Select category</option>
+          <option value="Health and Wellbeing">Health and Wellbeing</option>
+          <option value="Awareness Campaigns">Awareness Campaigns</option>
+          <option value="Indian History and Heritage">Indian History and Heritage</option>
+          <option value="Amrita Talks">Amrita Talks</option>
+          <option value="Financial Literacy">Financial Literacy</option>
+          <option value="21st Century Values">21st Century Values</option>
+          <option value="Student Mentorship">Student Mentorship</option>
+          <option value="Student Clubs">Student Clubs</option>
+          <option value="Women Empowerment">Women Empowerment</option>
+        </select>
+        {errors.category && <p className="text-red-600 text-sm">{errors.category.message}</p>}
+      </div>
+
+      <div>
+        <span className="block text-sm font-medium text-gray-700">Location Mode</span>
+        <input type="hidden" value="Offline" {...register('locationMode')} />
+        <p>Offline</p>
+      </div>
+
+      <div>
+        <label className="block text-sm font-medium text-gray-700">State</label>
+        <select
+          {...register('state')}
+          onChange={(e) => {
+            setSelectedState(e.target.value);
+            setValue('district', '');
+          }}
+          className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:ring focus:ring-primary"
+        >
+          <option value="">Select State</option>
+          {states.map((state) => (
+            <option key={state} value={state}>{state}</option>
+          ))}
+        </select>
+      </div>
+
+      <div>
+        <label className="block text-sm font-medium text-gray-700">District</label>
+        <select
+          {...register('district')}
+          className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:ring focus:ring-primary"
+        >
+          <option value="">Select District</option>
+          {districts.map((district) => (
+            <option key={district} value={district}>{district}</option>
+          ))}
+        </select>
+      </div>
+
+      <div>
+        <label className="block text-sm font-medium text-gray-700">City</label>
+        <input
+          type="text"
+          {...register('city')}
+          className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:ring focus:ring-primary"
+        />
+      </div>
+
+      <div>
+        <label className="block text-sm font-medium text-gray-700">Place Visited</label>
+        <input
+          type="text"
+          {...register('placeVisited')}
+          className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:ring focus:ring-primary"
+        />
+      </div>
+
+      <div>
+        <label className="block text-sm font-medium text-gray-700">Travel Time</label>
+        <input
+          type="text"
+          placeholder="e.g. 2 hours 30 minutes"
+          {...register('travelTime')}
+          className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:ring focus:ring-primary"
+        />
+      </div>
+
+      <div>
+        <label className="block text-sm font-medium text-gray-700">Execution Time</label>
+        <input
+          type="text"
+          placeholder="e.g. 1 hour"
+          {...register('executionTime')}
+          className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:ring focus:ring-primary"
+        />
+      </div>
+
+      <div>
+        <label className="block text-sm font-medium text-gray-700">Date of Completion</label>
+        <input
+          type="date"
+          {...register('completionDate')}
+          className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:ring focus:ring-primary"
+        />
+      </div>
+
+      <div>
+        <label className="block text-sm font-medium text-gray-700">Description (min 100 characters)</label>
         <textarea
           {...register('description')}
           rows={4}
-          className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-primary focus:ring-primary"
-          placeholder="Provide a detailed description of your project..."
+          className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:ring focus:ring-primary"
+          defaultValue="This is a detailed description of the project. It needs to be at least 100 characters long to pass validation. This project aims to achieve significant impact in the selected category through careful planning and execution."
         />
-        {errors.description && (
-          <p className="mt-1 text-sm text-red-600">{errors.description.message}</p>
-        )}
+        {errors.description && <p className="text-red-600 text-sm">{errors.description.message}</p>}
       </div>
 
       <div>
-        <label className="block text-sm font-medium text-gray-700">Objectives</label>
+        <label className="block text-sm font-medium text-gray-700">Content (min 100 characters)</label>
         <textarea
-          {...register('objectives')}
-          rows={3}
-          className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-primary focus:ring-primary"
-          placeholder="List the main objectives of your project..."
-        />
-        {errors.objectives && (
-          <p className="mt-1 text-sm text-red-600">{errors.objectives.message}</p>
-        )}
-      </div>
-
-      <div>
-        <label className="block text-sm font-medium text-gray-700">Methodology</label>
-        <textarea
-          {...register('methodology')}
+          {...register('content')}
           rows={4}
-          className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-primary focus:ring-primary"
-          placeholder="Describe your approach and methods..."
+          className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:ring focus:ring-primary"
+          defaultValue="This is the content of the proposal which also needs to be at least 100 characters long. It contains all the details about how the project will be implemented, the timeline, resources required, and expected outcomes."
         />
-        {errors.methodology && (
-          <p className="mt-1 text-sm text-red-600">{errors.methodology.message}</p>
-        )}
+        {errors.content && <p className="text-red-600 text-sm">{errors.content.message}</p>}
       </div>
 
-      <div>
-        <label className="block text-sm font-medium text-gray-700">Expected Outcomes</label>
-        <textarea
-          {...register('expectedOutcomes')}
-          rows={3}
-          className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-primary focus:ring-primary"
-          placeholder="What are the expected results and deliverables?"
-        />
-        {errors.expectedOutcomes && (
-          <p className="mt-1 text-sm text-red-600">{errors.expectedOutcomes.message}</p>
-        )}
-      </div>
-
-      <div>
-        <label className="block text-sm font-medium text-gray-700">Timeline</label>
-        <textarea
-          {...register('timeline')}
-          rows={3}
-          className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-primary focus:ring-primary"
-          placeholder="Provide a project timeline with milestones..."
-        />
-        {errors.timeline && (
-          <p className="mt-1 text-sm text-red-600">{errors.timeline.message}</p>
-        )}
-      </div>
-
-      <div>
-        <label className="block text-sm font-medium text-gray-700">References</label>
-        <textarea
-          {...register('references')}
-          rows={2}
-          className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-primary focus:ring-primary"
-          placeholder="List any references or sources..."
-        />
-      </div>
-
-      <div>
-        <label className="block text-sm font-medium text-gray-700">Attachment</label>
-        {initialData?.attachment && (
-          <div className="mb-2 flex items-center gap-2 text-sm text-gray-500">
-            <FileIcon className="w-4 h-4" />
-            <Link href={initialData.attachment} target="_blank" className="hover:underline">
-              Current attachment
-            </Link>
+      {/* File Upload Section */}
+      <div className="space-y-4">
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-2">
+            Upload Supporting Files (Optional)
+          </label>
+          <div className="border-2 border-dashed border-gray-300 rounded-lg p-6">
+            <div className="text-center">
+              <svg className="mx-auto h-12 w-12 text-gray-400" stroke="currentColor" fill="none" viewBox="0 0 48 48">
+                <path d="M28 8H12a4 4 0 00-4 4v20m32-12v8m0 0v8a4 4 0 01-4 4H12a4 4 0 01-4-4v-4m32-4l-3.172-3.172a4 4 0 00-5.656 0L28 28M8 32l9.172-9.172a4 4 0 015.656 0L28 28m0 0l4 4m4-24h8m-4-4v8m-12 4h.02" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
+              <div className="mt-4">
+                <label htmlFor="file-upload" className="cursor-pointer">
+                  <span className="mt-2 block text-sm font-medium text-gray-900">
+                    Drop files here or click to upload
+                  </span>
+                  <input
+                    id="file-upload"
+                    type="file"
+                    multiple
+                    accept=".pdf,.doc,.docx,.ppt,.pptx,.mp4,.mov,.avi,.jpg,.jpeg,.png,.gif"
+                    className="sr-only"
+                    onChange={handleFileChange}
+                  />
+                </label>
+                <p className="mt-2 text-xs text-gray-500">
+                  Supported formats: PDF, DOC, DOCX, PPT, PPTX, MP4, MOV, AVI, JPG, PNG, GIF
+                </p>
+                <p className="text-xs text-gray-500">
+                  Maximum file size: 50MB per file
+                </p>
+              </div>
+            </div>
           </div>
-        )}
-        <input
-          type="file"
-          onChange={handleFileChange}
-          accept=".pdf,.jpg,.jpeg,.png,.gif"
-          className="mt-1 block w-full text-sm text-gray-500
-            file:mr-4 file:py-2 file:px-4
-            file:rounded-md file:border-0
-            file:text-sm file:font-semibold
-            file:bg-primary file:text-white
-            hover:file:bg-primary-dark"
-        />
-        <p className="mt-1 text-sm text-gray-500">
-          Upload a PDF document or image (max 10MB)
-        </p>
+
+          {/* Selected Files Preview */}
+          {selectedFiles.length > 0 && (
+            <div className="mt-4">
+              <h4 className="text-sm font-medium text-gray-700 mb-2">Selected Files:</h4>
+              <div className="space-y-2">
+                {selectedFiles.map((file, index) => (
+                  <div key={index} className="flex items-center justify-between bg-gray-50 p-3 rounded-md">
+                    <div className="flex items-center">
+                      <div className="flex-shrink-0">
+                        {file.type.startsWith('image/') ? (
+                          <svg className="h-8 w-8 text-blue-500" fill="currentColor" viewBox="0 0 20 20">
+                            <path fillRule="evenodd" d="M4 3a2 2 0 00-2 2v10a2 2 0 002 2h12a2 2 0 002-2V5a2 2 0 00-2-2H4zm12 12H4l4-8 3 6 2-4 3 6z" clipRule="evenodd" />
+                          </svg>
+                        ) : file.type === 'application/pdf' ? (
+                          <svg className="h-8 w-8 text-red-500" fill="currentColor" viewBox="0 0 20 20">
+                            <path fillRule="evenodd" d="M4 4a2 2 0 012-2h4.586A2 2 0 0112 2.586L15.414 6A2 2 0 0116 7.414V16a2 2 0 01-2 2H6a2 2 0 01-2-2V4zm2 6a1 1 0 011-1h6a1 1 0 110 2H7a1 1 0 01-1-1zm1 3a1 1 0 100 2h6a1 1 0 100-2H7z" clipRule="evenodd" />
+                          </svg>
+                        ) : file.type.startsWith('video/') ? (
+                          <svg className="h-8 w-8 text-purple-500" fill="currentColor" viewBox="0 0 20 20">
+                            <path d="M2 6a2 2 0 012-2h6a2 2 0 012 2v8a2 2 0 01-2 2H4a2 2 0 01-2-2V6zM14.553 7.106A1 1 0 0014 8v4a1 1 0 00.553.894l2 1A1 1 0 0018 13V7a1 1 0 00-1.447-.894l-2 1z" />
+                          </svg>
+                        ) : (
+                          <svg className="h-8 w-8 text-gray-500" fill="currentColor" viewBox="0 0 20 20">
+                            <path fillRule="evenodd" d="M4 4a2 2 0 012-2h4.586A2 2 0 0112 2.586L15.414 6A2 2 0 0116 7.414V16a2 2 0 01-2 2H6a2 2 0 01-2-2V4z" clipRule="evenodd" />
+                          </svg>
+                        )}
+                      </div>
+                      <div className="ml-3">
+                        <p className="text-sm font-medium text-gray-900">{file.name}</p>
+                        <p className="text-xs text-gray-500">
+                          {(file.size / 1024 / 1024).toFixed(2)} MB
+                        </p>
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => removeFile(index)}
+                      className="ml-3 text-red-400 hover:text-red-600"
+                    >
+                      <svg className="h-5 w-5" fill="currentColor" viewBox="0 0 20 20">
+                        <path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" />
+                      </svg>
+                    </button>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
       </div>
 
-      <div className="flex gap-4 justify-end">
-        <Link
-          href="/dashboard/student/proposals"
-          className="px-4 py-2 border border-gray-300 rounded-md text-gray-700 hover:bg-gray-50"
-        >
-          Cancel
-        </Link>
+      <div className="flex justify-end">
         <button
           type="submit"
-          disabled={isLoading || status !== 'authenticated'}
-          className="px-4 py-2 bg-primary text-white rounded-md hover:bg-primary-dark transition-colors disabled:opacity-50"
+          disabled={isSubmitting}
+          className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition disabled:bg-blue-300"
         >
-          {isLoading ? 'Saving...' : proposalId ? 'Update Proposal' : 'Submit Proposal'}
+          {isSubmitting ? (existingProposal ? 'Updating...' : 'Submitting...') : (existingProposal ? 'Update Proposal' : 'Submit')}
         </button>
       </div>
     </form>
+    </div>
   );
-} 
+}

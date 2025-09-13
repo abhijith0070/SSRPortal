@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { auth } from '@auth';
-import prisma from '@/lib/prisma';
+import { prisma } from '@/lib/prisma';
 import { z } from 'zod';
 
 const proposalSchema = z.object({
@@ -177,4 +177,6 @@ export async function PUT(
       headers: { 'Content-Type': 'application/json' }
     });
   }
-} 
+}
+
+// ...existing code...
