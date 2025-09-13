@@ -10,7 +10,7 @@ import { CheckCircle, AlertCircle, Loader2 } from 'lucide-react';
 // Extended schema with UI-specific fields
 const projectSchema = proposalSchema.extend({
   file: z.any().optional(),
-  category: z.string().nonempty('Please select a category'),
+  category: z.string().min(1, 'Please select a category'),
   locationMode: z.literal('Offline'),
   state: z.string().optional(),
   district: z.string().optional(),
@@ -120,9 +120,48 @@ export default function ProjectForm({ existingProposal, onEditMode }: ProjectFor
   // Handle file selection
   const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     const files = event.target.files;
+    console.log('Files selected:', files);
+    
     if (files) {
       const fileArray = Array.from(files);
-      setSelectedFiles(prev => [...prev, ...fileArray]);
+      console.log('File array created:', fileArray.map(f => ({ name: f.name, size: f.size, type: f.type })));
+      
+      // Validate files before adding
+      const validFiles = fileArray.filter(file => {
+        const allowedTypes = [
+          'application/pdf',
+          'application/msword',
+          'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+          'application/vnd.ms-powerpoint',
+          'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+          'video/mp4',
+          'video/quicktime',
+          'video/x-msvideo',
+          'image/jpeg',
+          'image/jpg',
+          'image/png',
+          'image/gif'
+        ];
+        
+        if (!allowedTypes.includes(file.type)) {
+          console.warn(`Invalid file type: ${file.type} for file: ${file.name}`);
+          return false;
+        }
+        
+        const maxSize = 50 * 1024 * 1024; // 50MB
+        if (file.size > maxSize) {
+          console.warn(`File too large: ${file.size} bytes for file: ${file.name}`);
+          return false;
+        }
+        
+        return true;
+      });
+      
+      console.log('Valid files:', validFiles.map(f => f.name));
+      setSelectedFiles(prev => [...prev, ...validFiles]);
+      
+      // Clear the input so the same file can be selected again if needed
+      event.target.value = '';
     }
   };
 
@@ -135,7 +174,10 @@ export default function ProjectForm({ existingProposal, onEditMode }: ProjectFor
   const uploadFiles = async (files: File[]): Promise<string[]> => {
     const uploadedUrls: string[] = [];
     
-    for (const file of files) {
+    for (let i = 0; i < files.length; i++) {
+      const file = files[i];
+      console.log(`Uploading file ${i + 1}/${files.length}: ${file.name} (${file.size} bytes, ${file.type})`);
+      
       const formData = new FormData();
       formData.append('file', file);
       
@@ -145,17 +187,30 @@ export default function ProjectForm({ existingProposal, onEditMode }: ProjectFor
           body: formData,
         });
         
+        console.log(`Upload response status for ${file.name}:`, uploadResponse.status);
+        
         if (uploadResponse.ok) {
           const uploadResult = await uploadResponse.json();
-          uploadedUrls.push(uploadResult.url);
+          console.log(`Upload successful for ${file.name}:`, uploadResult);
+          
+          if (uploadResult.success && uploadResult.url) {
+            uploadedUrls.push(uploadResult.url);
+          } else {
+            console.error(`Upload API returned success=false for ${file.name}:`, uploadResult);
+            throw new Error(`Failed to upload ${file.name}: ${uploadResult.error || 'Unknown error'}`);
+          }
         } else {
-          console.error('Failed to upload file:', file.name);
+          const errorText = await uploadResponse.text();
+          console.error(`Failed to upload file ${file.name}:`, errorText);
+          throw new Error(`Failed to upload ${file.name}: ${errorText}`);
         }
       } catch (error) {
-        console.error('Error uploading file:', file.name, error);
+        console.error(`Error uploading file ${file.name}:`, error);
+        throw error; // Re-throw to stop the process
       }
     }
     
+    console.log(`Successfully uploaded ${uploadedUrls.length} files:`, uploadedUrls);
     return uploadedUrls;
   };
 
@@ -196,6 +251,9 @@ export default function ProjectForm({ existingProposal, onEditMode }: ProjectFor
   const onSubmit = async (data: ProjectFormData) => {
     setIsSubmitting(true);
     
+    console.log('Form submitted with data:', data);
+    console.log('Form validation passed - proceeding with submission');
+    
     try {
       // Check if user is logged in and has a team
       try {
@@ -226,10 +284,27 @@ export default function ProjectForm({ existingProposal, onEditMode }: ProjectFor
       if (selectedFiles.length > 0) {
         setStatusMessage({
           type: 'info',
-          message: 'Uploading files...'
+          message: `Uploading ${selectedFiles.length} file(s)...`
         });
         
-        uploadedFileUrls = await uploadFiles(selectedFiles);
+        console.log('Starting file upload for files:', selectedFiles.map(f => f.name));
+        
+        try {
+          uploadedFileUrls = await uploadFiles(selectedFiles);
+          console.log('File upload completed. URLs:', uploadedFileUrls);
+          
+          if (uploadedFileUrls.length === 0) {
+            throw new Error('Failed to upload files');
+          }
+          
+          if (uploadedFileUrls.length < selectedFiles.length) {
+            console.warn(`Only ${uploadedFileUrls.length} of ${selectedFiles.length} files uploaded successfully`);
+          }
+          
+        } catch (uploadError) {
+          console.error('File upload error:', uploadError);
+          throw new Error('Failed to upload files. Please try again.');
+        }
       }
       
       // Only include fields that match the API schema
@@ -238,7 +313,7 @@ export default function ProjectForm({ existingProposal, onEditMode }: ProjectFor
         description: data.description,
         content: data.content,
         // Optional fields
-        attachment: uploadedFileUrls.join(','),  // Store multiple file URLs as comma-separated string
+        attachment: uploadedFileUrls.length > 0 ? uploadedFileUrls.join(',') : '',  // Store multiple file URLs as comma-separated string
         link: '',        // We'll add link field later
         
         // Extra metadata fields (these won't be used by the API validation
@@ -257,6 +332,12 @@ export default function ProjectForm({ existingProposal, onEditMode }: ProjectFor
       };
 
       console.log('Submitting payload:', payload);
+      console.log('Payload validation check:');
+      console.log('- title:', data.title?.length, 'chars');
+      console.log('- description:', data.description?.length, 'chars');
+      console.log('- content:', data.content?.length, 'chars');
+      console.log('- attachment:', payload.attachment);
+      console.log('- uploadedFileUrls:', uploadedFileUrls);
 
       // Use PUT method if editing existing proposal, POST for new proposal
       const apiUrl = existingProposal 
@@ -293,7 +374,11 @@ export default function ProjectForm({ existingProposal, onEditMode }: ProjectFor
         } else if (errorData?.error === 'Proposal exists') {
           throw new Error(`You already have a proposal submitted. ${errorData.message || ''}`);
         } else if (errorData?.error === 'Validation failed') {
-          throw new Error(`Form validation failed. Please check all required fields.`);
+          console.error('Validation details:', errorData.details);
+          const validationMessages = errorData.details?.map((detail: any) => 
+            `${detail.path?.join('.') || 'field'}: ${detail.message}`
+          ).join(', ') || 'Unknown validation error';
+          throw new Error(`Form validation failed: ${validationMessages}`);
         } else {
           throw new Error(`Failed to submit form (${response.status}): ${errorData?.error || 'Unknown error'}`);
         }
