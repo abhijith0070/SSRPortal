@@ -180,7 +180,18 @@ export async function GET() {
         teamCode: userTeam.id       // From their team
       },
       orderBy: { updated_at: 'desc' },
-      include: { 
+      select: {
+        id: true,
+        title: true,
+        description: true,
+        content: true,
+        attachment: true,
+        link: true,  // Make sure link field is included for metadata
+        state: true,
+        remarks: true,
+        created_at: true,
+        updated_at: true,
+        remark_updated_at: true,
         author: { select: { firstName: true, lastName: true, email: true } },
         Team: { 
           include: { 
