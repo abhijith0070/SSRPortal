@@ -78,8 +78,8 @@ interface ExistingProposal {
   description: string;
   content: string;
   attachment?: string;
-  link?: string;
-  // Add metadata fields if they exist
+  link?: string;  // Will contain JSON string of metadata for auto-fill
+  // Add metadata fields if they exist (legacy support)
   metadata?: {
     category?: string;
     locationMode?: string;
@@ -104,6 +104,8 @@ export default function ProjectForm({ existingProposal, onEditMode }: ProjectFor
   const [statusMessage, setStatusMessage] = useState<StatusMessage | null>(null);
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
   const [uploadProgress, setUploadProgress] = useState<number>(0);
+  const [loadedProposal, setLoadedProposal] = useState<ExistingProposal | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
 
   const {
     register,
@@ -117,51 +119,55 @@ export default function ProjectForm({ existingProposal, onEditMode }: ProjectFor
   const states = Object.keys(indianStatesWithDistricts);
   const districts = selectedState ? indianStatesWithDistricts[selectedState] || [] : [];
 
+  // Load existing proposal data if user has a rejected proposal
+  useEffect(() => {
+    async function loadExistingProposal() {
+      try {
+        setIsLoading(true);
+        const response = await fetch('/api/student/proposals');
+        
+        if (response.ok) {
+          const data = await response.json();
+          console.log('API response for loading proposals:', data);
+          
+          if (data.success && data.data && data.data.length > 0) {
+            const proposal = data.data[0]; // Get the latest proposal
+            console.log('Latest proposal found:', proposal);
+            
+            // Only auto-load if it's REJECTED (allowing editing)
+            if (proposal.state === 'REJECTED') {
+              console.log('Loading rejected proposal for editing:', proposal.id);
+              setLoadedProposal(proposal);
+            } else {
+              console.log('Proposal state is not REJECTED, state:', proposal.state);
+            }
+          } else {
+            console.log('No proposals found in response');
+          }
+        } else {
+          console.log('API response not OK:', response.status, response.statusText);
+        }
+      } catch (error) {
+        console.error('Error loading existing proposal:', error);
+      } finally {
+        setIsLoading(false);
+      }
+    }
+
+    // Only load if no existing proposal is passed as prop
+    if (!existingProposal) {
+      loadExistingProposal();
+    } else {
+      setIsLoading(false);
+    }
+  }, [existingProposal]);
+
   // Handle file selection
   const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     const files = event.target.files;
-    console.log('Files selected:', files);
-    
     if (files) {
       const fileArray = Array.from(files);
-      console.log('File array created:', fileArray.map(f => ({ name: f.name, size: f.size, type: f.type })));
-      
-      // Validate files before adding
-      const validFiles = fileArray.filter(file => {
-        const allowedTypes = [
-          'application/pdf',
-          'application/msword',
-          'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-          'application/vnd.ms-powerpoint',
-          'application/vnd.openxmlformats-officedocument.presentationml.presentation',
-          'video/mp4',
-          'video/quicktime',
-          'video/x-msvideo',
-          'image/jpeg',
-          'image/jpg',
-          'image/png',
-          'image/gif'
-        ];
-        
-        if (!allowedTypes.includes(file.type)) {
-          console.warn(`Invalid file type: ${file.type} for file: ${file.name}`);
-          return false;
-        }
-        
-        const maxSize = 50 * 1024 * 1024; // 50MB
-        if (file.size > maxSize) {
-          console.warn(`File too large: ${file.size} bytes for file: ${file.name}`);
-          return false;
-        }
-        
-        return true;
-      });
-      
-      console.log('Valid files:', validFiles.map(f => f.name));
-      setSelectedFiles(prev => [...prev, ...validFiles]);
-      
-      // Clear the input so the same file can be selected again if needed
-      event.target.value = '';
+      setSelectedFiles(prev => [...prev, ...fileArray]);
     }
   };
 
@@ -174,10 +180,7 @@ export default function ProjectForm({ existingProposal, onEditMode }: ProjectFor
   const uploadFiles = async (files: File[]): Promise<string[]> => {
     const uploadedUrls: string[] = [];
     
-    for (let i = 0; i < files.length; i++) {
-      const file = files[i];
-      console.log(`Uploading file ${i + 1}/${files.length}: ${file.name} (${file.size} bytes, ${file.type})`);
-      
+    for (const file of files) {
       const formData = new FormData();
       formData.append('file', file);
       
@@ -187,72 +190,118 @@ export default function ProjectForm({ existingProposal, onEditMode }: ProjectFor
           body: formData,
         });
         
-        console.log(`Upload response status for ${file.name}:`, uploadResponse.status);
-        
         if (uploadResponse.ok) {
           const uploadResult = await uploadResponse.json();
-          console.log(`Upload successful for ${file.name}:`, uploadResult);
-          
-          if (uploadResult.success && uploadResult.url) {
-            uploadedUrls.push(uploadResult.url);
-          } else {
-            console.error(`Upload API returned success=false for ${file.name}:`, uploadResult);
-            throw new Error(`Failed to upload ${file.name}: ${uploadResult.error || 'Unknown error'}`);
-          }
+          uploadedUrls.push(uploadResult.url);
         } else {
-          const errorText = await uploadResponse.text();
-          console.error(`Failed to upload file ${file.name}:`, errorText);
-          throw new Error(`Failed to upload ${file.name}: ${errorText}`);
+          console.error('Failed to upload file:', file.name);
         }
       } catch (error) {
-        console.error(`Error uploading file ${file.name}:`, error);
-        throw error; // Re-throw to stop the process
+        console.error('Error uploading file:', file.name, error);
       }
     }
     
-    console.log(`Successfully uploaded ${uploadedUrls.length} files:`, uploadedUrls);
     return uploadedUrls;
   };
 
   // Pre-fill form with existing proposal data if editing
   useEffect(() => {
-    if (existingProposal) {
+    const proposal = existingProposal || loadedProposal;
+    
+    if (proposal) {
+      console.log('Pre-filling form with proposal:', proposal);
+      
       // Notify parent that we're in edit mode
       onEditMode?.(true);
       
       // Set basic fields
-      setValue('title', existingProposal.title);
-      setValue('description', existingProposal.description);
-      setValue('content', existingProposal.content);
+      setValue('title', proposal.title);
+      setValue('description', proposal.description);
+      setValue('content', proposal.content);
+      
+      // Parse metadata from link field (JSON string) or fallback to metadata property
+      let metadata = null;
+      
+      // Try to parse metadata from link field first (new format)
+      if (proposal.link) {
+        try {
+          metadata = JSON.parse(proposal.link);
+          console.log('Parsed metadata from link field:', metadata);
+        } catch (e) {
+          console.log('Link field is not JSON metadata, checking metadata property. Link content:', proposal.link);
+        }
+      }
+      
+      // Fallback to existing metadata property (old format)
+      if (!metadata && proposal.metadata) {
+        metadata = proposal.metadata;
+        console.log('Using metadata property:', metadata);
+      }
       
       // Set metadata fields if they exist
-      if (existingProposal.metadata) {
-        setValue('category', existingProposal.metadata.category || '');
+      if (metadata) {
+        console.log('Setting form values with metadata:', metadata);
+        
+        // Only set category if it has a value
+        if (metadata.category && metadata.category.trim()) {
+          setValue('category', metadata.category);
+        }
+        
         setValue('locationMode', 'Offline');
-        setValue('state', existingProposal.metadata.state || '');
-        setValue('district', existingProposal.metadata.district || '');
-        setValue('city', existingProposal.metadata.city || '');
-        setValue('placeVisited', existingProposal.metadata.placeVisited || '');
-        setValue('travelTime', existingProposal.metadata.travelTime || '');
-        setValue('executionTime', existingProposal.metadata.executionTime || '');
-        setValue('completionDate', existingProposal.metadata.completionDate || '');
+        
+        if (metadata.state && metadata.state.trim()) {
+          setValue('state', metadata.state);
+        }
+        if (metadata.district && metadata.district.trim()) {
+          setValue('district', metadata.district);
+        }
+        if (metadata.city && metadata.city.trim()) {
+          setValue('city', metadata.city);
+        }
+        if (metadata.placeVisited && metadata.placeVisited.trim()) {
+          setValue('placeVisited', metadata.placeVisited);
+        }
+        if (metadata.travelTime && metadata.travelTime.trim()) {
+          setValue('travelTime', metadata.travelTime);
+        }
+        if (metadata.executionTime && metadata.executionTime.trim()) {
+          setValue('executionTime', metadata.executionTime);
+        }
+        if (metadata.completionDate && metadata.completionDate.trim()) {
+          setValue('completionDate', metadata.completionDate);
+        }
         
         // Set selected state for district dropdown
-        if (existingProposal.metadata.state) {
-          setSelectedState(existingProposal.metadata.state);
+        if (metadata.state && metadata.state.trim()) {
+          setSelectedState(metadata.state);
         }
+      } else {
+        console.log('No metadata found for pre-filling. This may be a proposal created before metadata storage was implemented.');
+        // For older proposals without metadata, set defaults only for required fields
+        setValue('locationMode', 'Offline');
+        
+        // Show a helpful message to the user
+        setStatusMessage({
+          type: 'info',
+          message: 'Please fill in all form fields below. Your previous basic information (title, description, content) has been loaded, but additional details need to be filled in again.'
+        });
+      }
+      
+      // Handle existing file attachments
+      if (proposal.attachment) {
+        // Parse comma-separated file URLs
+        const fileUrls = proposal.attachment.split(',').filter(url => url.trim());
+        // You could set these in a display component to show existing files
+        console.log('Existing files:', fileUrls);
       }
     } else {
       // Notify parent that we're in create mode
       onEditMode?.(false);
     }
-  }, [existingProposal, setValue, onEditMode]);
+  }, [existingProposal, loadedProposal, setValue, onEditMode]);
 
   const onSubmit = async (data: ProjectFormData) => {
     setIsSubmitting(true);
-    
-    console.log('Form submitted with data:', data);
-    console.log('Form validation passed - proceeding with submission');
     
     try {
       // Check if user is logged in and has a team
@@ -284,67 +333,43 @@ export default function ProjectForm({ existingProposal, onEditMode }: ProjectFor
       if (selectedFiles.length > 0) {
         setStatusMessage({
           type: 'info',
-          message: `Uploading ${selectedFiles.length} file(s)...`
+          message: 'Uploading files...'
         });
         
-        console.log('Starting file upload for files:', selectedFiles.map(f => f.name));
-        
-        try {
-          uploadedFileUrls = await uploadFiles(selectedFiles);
-          console.log('File upload completed. URLs:', uploadedFileUrls);
-          
-          if (uploadedFileUrls.length === 0) {
-            throw new Error('Failed to upload files');
-          }
-          
-          if (uploadedFileUrls.length < selectedFiles.length) {
-            console.warn(`Only ${uploadedFileUrls.length} of ${selectedFiles.length} files uploaded successfully`);
-          }
-          
-        } catch (uploadError) {
-          console.error('File upload error:', uploadError);
-          throw new Error('Failed to upload files. Please try again.');
-        }
+        uploadedFileUrls = await uploadFiles(selectedFiles);
       }
       
       // Only include fields that match the API schema
+      const metadata = {
+        category: data.category,
+        locationMode: data.locationMode,
+        state: data.state || '',
+        district: data.district || '',
+        city: data.city || '',
+        placeVisited: data.placeVisited || '',
+        travelTime: data.travelTime || '',
+        executionTime: data.executionTime || '',
+        completionDate: data.completionDate || '',
+      };
+
       const payload = {
         title: data.title,
         description: data.description,
         content: data.content,
         // Optional fields
-        attachment: uploadedFileUrls.length > 0 ? uploadedFileUrls.join(',') : '',  // Store multiple file URLs as comma-separated string
-        link: '',        // We'll add link field later
+        attachment: uploadedFileUrls.join(','),  // Store multiple file URLs as comma-separated string
+        link: JSON.stringify(metadata),         // Store metadata as JSON in link field for auto-fill
         
         // Extra metadata fields (these won't be used by the API validation
         // but will be available in the raw request body)
-        _metadata: {
-          category: data.category,
-          locationMode: data.locationMode,
-          state: data.state || '',
-          district: data.district || '',
-          city: data.city || '',
-          placeVisited: data.placeVisited || '',
-          travelTime: data.travelTime || '',
-          executionTime: data.executionTime || '',
-          completionDate: data.completionDate || '',
-        }
+        _metadata: metadata
       };
 
       console.log('Submitting payload:', payload);
-      console.log('Payload validation check:');
-      console.log('- title:', data.title?.length, 'chars');
-      console.log('- description:', data.description?.length, 'chars');
-      console.log('- content:', data.content?.length, 'chars');
-      console.log('- attachment:', payload.attachment);
-      console.log('- uploadedFileUrls:', uploadedFileUrls);
 
-      // Use PUT method if editing existing proposal, POST for new proposal
-      const apiUrl = existingProposal 
-        ? `/api/student/proposals/${existingProposal.id}` 
-        : '/api/student/proposals';
-      
-      const method = existingProposal ? 'PUT' : 'POST';
+      // Always use POST to /api/student/proposals - it handles both create and update logic
+      const apiUrl = '/api/student/proposals';
+      const method = 'POST';
 
       const response = await fetch(apiUrl, {
         method: method,
@@ -374,11 +399,7 @@ export default function ProjectForm({ existingProposal, onEditMode }: ProjectFor
         } else if (errorData?.error === 'Proposal exists') {
           throw new Error(`You already have a proposal submitted. ${errorData.message || ''}`);
         } else if (errorData?.error === 'Validation failed') {
-          console.error('Validation details:', errorData.details);
-          const validationMessages = errorData.details?.map((detail: any) => 
-            `${detail.path?.join('.') || 'field'}: ${detail.message}`
-          ).join(', ') || 'Unknown validation error';
-          throw new Error(`Form validation failed: ${validationMessages}`);
+          throw new Error(`Form validation failed. Please check all required fields.`);
         } else {
           throw new Error(`Failed to submit form (${response.status}): ${errorData?.error || 'Unknown error'}`);
         }
@@ -421,6 +442,14 @@ export default function ProjectForm({ existingProposal, onEditMode }: ProjectFor
 
   return (
     <div>
+      {/* Loading state */}
+      {isLoading && (
+        <div className="flex items-center justify-center py-8">
+          <Loader2 className="h-6 w-6 animate-spin mr-2" />
+          <span>Loading existing proposal data...</span>
+        </div>
+      )}
+      
       {/* Status Message */}
       {statusMessage && (
         <div className={`mb-6 p-4 rounded-md ${
