@@ -35,7 +35,8 @@ interface UpdateTeamFormProps {
 interface BatchOption {
   label: string;
   value: string;
-  range: [number, number]; // ✅ Add range property
+  range?: [number, number];
+  ranges?: [number, number][];
 }
 
 export default function UpdateTeamForm({ 
@@ -55,16 +56,16 @@ export default function UpdateTeamForm({
   const [isLoading, setIsLoading] = useState(false);
   const [isLoadingData, setIsLoadingData] = useState(true);
   
-  // ✅ FIXED: Use the same batch options with ranges as in form.tsx
+  // ✅ FIXED: Updated batch options to match form.tsx with ranges support
   const [batches] = useState<BatchOption[]>([
     { label: 'AI A', value: 'AI_A', range: [1, 12] },
     { label: 'AI B', value: 'AI_B', range: [13, 23] },
     { label: 'AI-DS', value: 'AI_DS', range: [24, 34] },
-    { label: 'CYS', value: 'CYS', range: [35, 41] },
+    { label: 'CYS', value: 'CYS', ranges: [[35, 41], [162, 162]] }, // Fixed: CYS gets 162
     { label: 'CSE A', value: 'CSE_A', range: [42, 52] },
     { label: 'CSE B', value: 'CSE_B', range: [53, 64] },
     { label: 'CSE C', value: 'CSE_C', range: [65, 77] },
-    { label: 'CSE D', value: 'CSE_D', range: [78, 89] },
+    { label: 'CSE D', value: 'CSE_D', ranges: [[78, 89], [161, 161]] }, // Fixed: CSE D gets 161
     { label: 'ECE A', value: 'ECE_A', range: [90, 99] },
     { label: 'ECE B', value: 'ECE_B', range: [100, 112] },
     { label: 'EAC', value: 'EAC', range: [113, 123] },
@@ -80,7 +81,7 @@ export default function UpdateTeamForm({
   
   const router = useRouter();
 
-  // ✅ FIXED: Generate team numbers based on batch-specific ranges
+  // ✅ FIXED: Updated generateTeamNumbers to handle both single range and multiple ranges
   const generateTeamNumbers = (batchValue: string): string[] => {
     const numbers: string[] = [];
     const year = new Date().getFullYear().toString().slice(-2);
@@ -92,12 +93,21 @@ export default function UpdateTeamForm({
       return [];
     }
     
-    const [start, end] = batchConfig.range;
-    
-    // Generate numbers based on the specific batch range
-    for (let i = start; i <= end; i++) {
-      const paddedNumber = i.toString().padStart(3, '0');
-      numbers.push(`SSR ${year}-${paddedNumber}`);
+    if (batchConfig.ranges) {
+      // Handle multiple ranges (CSE D: 78-89 and 161-162)
+      batchConfig.ranges.forEach(([start, end]) => {
+        for (let i = start; i <= end; i++) {
+          const paddedNumber = i.toString().padStart(3, '0');
+          numbers.push(`SSR ${year}-${paddedNumber}`);
+        }
+      });
+    } else if (batchConfig.range) {
+      // Handle single range
+      const [start, end] = batchConfig.range;
+      for (let i = start; i <= end; i++) {
+        const paddedNumber = i.toString().padStart(3, '0');
+        numbers.push(`SSR ${year}-${paddedNumber}`);
+      }
     }
     
     return numbers;
