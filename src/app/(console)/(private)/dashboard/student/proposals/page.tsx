@@ -142,7 +142,7 @@ export default function StudentProposalsPage() {
               <div className="flex items-center mt-2">
                 <span className={`inline-flex items-center px-3 py-1 rounded-full text-sm font-medium ${getStatusColor(proposal.state)}`}>
                   {getStatusIcon(proposal.state)}
-                  <span className="ml-1 capitalize">{proposal.state.toLowerCase()}</span>
+                  <span className="ml-1 capitalize">{proposal.state === 'DRAFT' ? 'Pending' : proposal.state.toLowerCase()}</span>
                 </span>
                 <span className="ml-4 text-sm text-gray-500">
                   Submitted: {new Date(proposal.created_at).toLocaleDateString()}
@@ -196,7 +196,7 @@ export default function StudentProposalsPage() {
             
             <div>
               <h4 className="font-semibold text-gray-700 mb-2">Content</h4>
-              <p className="text-gray-600 whitespace-pre-wrap">{proposal.content}</p>
+              <p className="text-gray-600 whitespace-pre-wrap">{proposal.content.replace(/\n\n<!-- METADATA:.*? -->/, '')}</p>
             </div>
 
             {/* Links and attachments */}

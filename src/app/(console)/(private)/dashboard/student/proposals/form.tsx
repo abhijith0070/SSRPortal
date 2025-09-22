@@ -10,15 +10,15 @@ import { CheckCircle, AlertCircle, Loader2 } from 'lucide-react';
 // Extended schema with UI-specific fields
 const projectSchema = proposalSchema.extend({
   file: z.any().optional(),
-  category: z.string().min(1, 'Please select a category'),
+  category: z.string().min(1, 'Project category is required'),
   locationMode: z.literal('Offline'),
-  state: z.string().optional(),
-  district: z.string().optional(),
-  city: z.string().optional(),
-  placeVisited: z.string().optional(),
-  travelTime: z.string().optional(),
-  executionTime: z.string().optional(),
-  completionDate: z.string().optional(),
+  state: z.string().min(1, 'State is required'),
+  district: z.string().min(1, 'District is required'),
+  city: z.string().min(1, 'City is required'),
+  placeVisited: z.string().min(1, 'Place visited is required'),
+  travelTime: z.string().min(1, 'Travel time is required'),
+  executionTime: z.string().min(1, 'Execution time is required'),
+  completionDate: z.string().min(1, 'Completion date is required'),
 });
 
 type ProjectFormData = z.infer<typeof projectSchema>;
@@ -30,47 +30,204 @@ type StatusMessage = {
 };
 
 const indianStatesWithDistricts: Record<string, string[]> = {
-  "Andhra Pradesh": [],
-  "Arunachal Pradesh": [],
-  "Assam": [],
-  "Bihar": [],
-  "Chhattisgarh": [],
-  "Goa": [],
-  "Gujarat": [],
-  "Haryana": [],
-  "Himachal Pradesh": [],
-  "Jharkhand": [],
-  "Karnataka": [],
-  "Kerala": [
-    "Alappuzha","Ernakulam","Idukki","Kannur","Kasaragod","Kollam",
-    "Kottayam","Kozhikode","Malappuram","Palakkad","Pathanamthitta",
-    "Thiruvananthapuram","Thrissur","Wayanad"
+  "Andhra Pradesh": [
+    "Anantapur", "Chittoor", "East Godavari", "Guntur", "Krishna", "Kurnool",
+    "Prakasam", "Sri Potti Sriramulu Nellore", "Srikakulam", "Visakhapatnam",
+    "Vizianagaram", "West Godavari", "YSR Kadapa", "Alluri Sitharama Raju",
+    "Anakapalli", "Bapatla", "Eluru", "Kakinada", "Konaseema", "Nandyal",
+    "Palnadu", "Parvathipuram Manyam", "Tirupati"
   ],
-  "Madhya Pradesh": [],
-  "Maharashtra": [],
-  "Manipur": [],
-  "Meghalaya": [],
-  "Mizoram": [],
-  "Nagaland": [],
-  "Odisha": [],
-  "Punjab": [],
-  "Rajasthan": [],
-  "Sikkim": [],
-  "Tamil Nadu": [],
-  "Telangana": [],
-  "Tripura": [],
-  "Uttar Pradesh": [],
-  "Uttarakhand": [],
-  "West Bengal": [],
-  "Andaman and Nicobar Islands": [],
-  "Chandigarh": [],
-  "Dadra and Nagar Haveli and Daman and Diu": [],
-  "Delhi": [],
-  "Jammu and Kashmir": [],
-  "Ladakh": [],
-  "Lakshadweep": [],
-  "Puducherry": []
+  "Arunachal Pradesh": [
+    "Tawang", "West Kameng", "East Kameng", "Pakke-Kessang", "Papum Pare",
+    "Kamle", "Kra Daadi", "Kurung Kumey", "Lower Subansiri", "Upper Subansiri",
+    "Shi Yomi", "West Siang", "East Siang", "Siang", "Lower Siang", "Upper Siang",
+    "Upper Siang", "Upper Siang", "Upper Siang", "Upper Siang", "Upper Siang",
+    "Upper Siang", "Upper Siang", "Upper Siang", "Upper Siang"
+  ],
+  "Assam": [
+    "Baksa", "Barpeta", "Biswanath", "Bongaigaon", "Cachar", "Charaideo",
+    "Chirang", "Darrang", "Dhemaji", "Dhubri", "Dibrugarh", "Goalpara",
+    "Golaghat", "Hailakandi", "Hojai", "Jorhat", "Kamrup", "Kamrup Metropolitan",
+    "Karbi Anglong", "Karimganj", "Kokrajhar", "Lakhimpur", "Majuli", "Morigaon",
+    "Nagaon", "Nalbari", "Sivasagar", "Sonitpur", "South Salmara-Mankachar",
+    "Tinsukia", "Udalguri", "West Karbi Anglong"
+  ],
+  "Bihar": [
+    "Araria", "Arwal", "Aurangabad", "Banka", "Begusarai", "Bhagalpur", "Bhojpur",
+    "Buxar", "Darbhanga", "East Champaran", "Gaya", "Gopalganj", "Jamui",
+    "Jehanabad", "Kaimur", "Katihar", "Khagaria", "Kishanganj", "Lakhisarai",
+    "Madhepura", "Madhubani", "Munger", "Muzaffarpur", "Nalanda", "Nawada",
+    "Patna", "Purnia", "Rohtas", "Saharsa", "Samastipur", "Saran", "Sheikhpura",
+    "Sheohar", "Sitamarhi", "Siwan", "Supaul", "Vaishali", "West Champaran"
+  ],
+  "Chhattisgarh": [
+    "Balod", "Baloda Bazar", "Balrampur", "Bastar", "Bemetara", "Bijapur",
+    "Bilaspur", "Dantewada", "Dhamtari", "Durg", "Gariaband", "Janjgir-Champa",
+    "Jashpur", "Kabirdham", "Kanker", "Kondagaon", "Korba", "Koriya", "Mahasamund",
+    "Mungeli", "Narayanpur", "Raigarh", "Raipur", "Rajnandgaon", "Sukma",
+    "Surajpur", "Surguja"
+  ],
+  "Goa": ["North Goa", "South Goa"],
+  "Gujarat": [
+    "Ahmedabad", "Amreli", "Anand", "Aravalli", "Banaskantha", "Bharuch", "Bhavnagar",
+    "Botad", "Chhota Udaipur", "Dahod", "Dang", "Devbhoomi Dwarka", "Gandhinagar",
+    "Gir Somnath", "Jamnagar", "Junagadh", "Kheda", "Kutch", "Mahisagar", "Mehsana",
+    "Morbi", "Narmada", "Navsari", "Panchmahal", "Patan", "Porbandar", "Rajkot",
+    "Sabarkantha", "Surat", "Surendranagar", "Tapi", "Vadodara", "Valsad"
+  ],
+  "Haryana": [
+    "Ambala", "Bhiwani", "Charkhi Dadri", "Faridabad", "Fatehabad", "Gurugram",
+    "Hisar", "Jhajjar", "Jind", "Kaithal", "Karnal", "Kurukshetra", "Mahendragarh",
+    "Nuh", "Palwal", "Panchkula", "Panipat", "Rewari", "Rohtak", "Sirsa",
+    "Sonipat", "Yamunanagar"
+  ],
+  "Himachal Pradesh": [
+    "Bilaspur", "Chamba", "Hamirpur", "Kangra", "Kinnaur", "Kullu", "Lahaul and Spiti",
+    "Mandi", "Shimla", "Sirmaur", "Solan", "Una"
+  ],
+  "Jharkhand": [
+    "Bokaro", "Chatra", "Deoghar", "Dhanbad", "Dumka", "East Singhbhum",
+    "Garhwa", "Giridih", "Godda", "Gumla", "Hazaribagh", "Jamtara", "Khunti",
+    "Koderma", "Latehar", "Lohardaga", "Pakur", "Palamu", "Ramgarh", "Ranchi",
+    "Sahebganj", "Saraikela Kharsawan", "Simdega", "West Singhbhum"
+  ],
+  "Karnataka": [
+    "Bagalkot", "Bangalore Rural", "Bangalore Urban", "Belagavi", "Ballari",
+    "Bidar", "Chamarajanagar", "Chikkaballapur", "Chikkamagaluru", "Chitradurga",
+    "Dakshina Kannada", "Davanagere", "Dharwad", "Gadag", "Hassan", "Haveri",
+    "Kalaburagi", "Kodagu", "Kolar", "Koppal", "Mandya", "Mysuru", "Raichur",
+    "Ramanagara", "Shivamogga", "Tumakuru", "Udupi", "Uttara Kannada", "Vijayapura", "Yadgir"
+  ],
+  "Kerala": [
+    "Alappuzha", "Ernakulam", "Idukki", "Kannur", "Kasaragod", "Kollam",
+    "Kottayam", "Kozhikode", "Malappuram", "Palakkad", "Pathanamthitta",
+    "Thiruvananthapuram", "Thrissur", "Wayanad"
+  ],
+  "Madhya Pradesh": [
+    "Agar Malwa", "Alirajpur", "Anuppur", "Ashoknagar", "Balaghat", "Barwani",
+    "Betul", "Bhind", "Bhopal", "Burhanpur", "Chhatarpur", "Chhindwara", "Damoh",
+    "Datia", "Dewas", "Dhar", "Dindori", "Guna", "Gwalior", "Harda", "Hoshangabad",
+    "Indore", "Jabalpur", "Jhabua", "Katni", "Khandwa", "Khargone", "Mandla",
+    "Mandsaur", "Morena", "Narsinghpur", "Neemuch", "Panna", "Raisen", "Rajgarh",
+    "Ratlam", "Rewa", "Sagar", "Satna", "Sehore", "Seoni", "Shahdol", "Shajapur",
+    "Sheopur", "Shivpuri", "Sidhi", "Singrauli", "Tikamgarh", "Ujjain", "Umaria", "Vidisha"
+  ],
+  "Maharashtra": [
+    "Ahmednagar", "Akola", "Amravati", "Aurangabad", "Beed", "Bhandara", "Buldhana",
+    "Chandrapur", "Dhule", "Gadchiroli", "Gondia", "Hingoli", "Jalgaon", "Jalna",
+    "Kolhapur", "Latur", "Mumbai City", "Mumbai Suburban", "Nagpur", "Nanded",
+    "Nandurbar", "Nashik", "Osmanabad", "Palghar", "Parbhani", "Pune", "Raigad",
+    "Ratnagiri", "Sangli", "Satara", "Sindhudurg", "Solapur", "Thane", "Wardha",
+    "Washim", "Yavatmal"
+  ],
+  "Manipur": [
+    "Bishnupur", "Chandel", "Churachandpur", "Imphal East", "Imphal West",
+    "Jiribam", "Kakching", "Kamjong", "Kangpokpi", "Noney", "Pherzawl",
+    "Senapati", "Tamenglong", "Tengnoupal", "Thoubal", "Ukhrul"
+  ],
+  "Meghalaya": [
+    "East Garo Hills", "East Jaintia Hills", "East Khasi Hills", "North Garo Hills",
+    "Ri Bhoi", "South Garo Hills", "South West Garo Hills", "South West Khasi Hills",
+    "West Garo Hills", "West Jaintia Hills", "West Khasi Hills"
+  ],
+  "Mizoram": [
+    "Aizawl", "Champhai", "Hnahthial", "Khawzawl", "Kolasib", "Lawngtlai",
+    "Lunglei", "Mamit", "Saiha", "Saitual", "Serchhip"
+  ],
+  "Nagaland": [
+    "Chumoukedima", "Dimapur", "Kiphire", "Kohima", "Longleng", "Mokokchung",
+    "Mon", "Niuland", "Noklak", "Peren", "Phek", "Shamator", "Tseminyu", "Tuensang", "Wokha", "Zunheboto"
+  ],
+  "Odisha": [
+    "Angul", "Balangir", "Balasore", "Bargarh", "Bhadrak", "Boudh", "Cuttack",
+    "Deogarh", "Dhenkanal", "Gajapati", "Ganjam", "Jagatsinghpur", "Jajpur",
+    "Jharsuguda", "Kalahandi", "Kandhamal", "Kendrapara", "Kendujhar",
+    "Khordha", "Koraput", "Malkangiri", "Mayurbhanj", "Nabarangpur",
+    "Nayagarh", "Nuapada", "Puri", "Rayagada", "Sambalpur", "Subarnapur", "Sundargarh"
+  ],
+  "Punjab": [
+    "Amritsar", "Barnala", "Bathinda", "Faridkot", "Fatehgarh Sahib", "Fazilka",
+    "Ferozepur", "Gurdaspur", "Hoshiarpur", "Jalandhar", "Kapurthala", "Ludhiana",
+    "Mansa", "Moga", "Mohali", "Muktsar", "Pathankot", "Patiala", "Rupnagar",
+    "Sangrur", "Shaheed Bhagat Singh Nagar", "Tarn Taran"
+  ],
+  "Rajasthan": [
+    "Ajmer", "Alwar", "Banswara", "Baran", "Barmer", "Bharatpur", "Bhilwara",
+    "Bikaner", "Bundi", "Chittorgarh", "Churu", "Dausa", "Dholpur", "Dungarpur",
+    "Hanumangarh", "Jaipur", "Jaisalmer", "Jalore", "Jhalawar", "Jhunjhunu",
+    "Jodhpur", "Karauli", "Kota", "Nagaur", "Pali", "Pratapgarh", "Rajsamand",
+    "Sawai Madhopur", "Sikar", "Sirohi", "Sri Ganganagar", "Tonk", "Udaipur"
+  ],
+  "Sikkim": ["East Sikkim", "West Sikkim", "North Sikkim", "South Sikkim", "Pakyong", "Soreng"],
+  "Tamil Nadu": [
+    "Ariyalur", "Chengalpattu", "Chennai", "Coimbatore", "Cuddalore", "Dharmapuri",
+    "Dindigul", "Erode", "Kallakurichi", "Kancheepuram", "Karur", "Krishnagiri",
+    "Madurai", "Mayiladuthurai", "Nagapattinam", "Namakkal", "Nilgiris", "Perambalur",
+    "Pudukkottai", "Ramanathapuram", "Ranipet", "Salem", "Sivaganga", "Tenkasi",
+    "Thanjavur", "Theni", "Thoothukudi", "Tiruchirappalli", "Tirunelveli",
+    "Tirupathur", "Tiruppur", "Tiruvallur", "Tiruvannamalai", "Tiruvarur",
+    "Vellore", "Viluppuram", "Virudhunagar"
+  ],
+  "Telangana": [
+    "Adilabad", "Bhadradri Kothagudem", "Hanamkonda", "Hyderabad", "Jagtial",
+    "Jangaon", "Jayashankar Bhupalpally", "Jogulamba Gadwal", "Kamareddy", "Karimnagar",
+    "Khammam", "Komaram Bheem Asifabad", "Mahabubabad", "Mahabubnagar", "Mancherial",
+    "Medak", "Medchal-Malkajgiri", "Mulugu", "Nagarkurnool", "Nalgonda", "Narayanpet",
+    "Nirmal", "Nizamabad", "Peddapalli", "Rajanna Sircilla", "Ranga Reddy", "Sangareddy",
+    "Siddipet", "Suryapet", "Vikarabad", "Wanaparthy", "Warangal", "Yadadri Bhuvanagiri"
+  ],
+  "Tripura": [
+    "Dhalai", "Gomati", "Khowai", "North Tripura", "Sepahijala", "South Tripura",
+    "Unakoti", "West Tripura"
+  ],
+  "Uttar Pradesh": [
+    "Agra", "Aligarh", "Ambedkar Nagar", "Amethi", "Amroha", "Auraiya", "Ayodhya",
+    "Azamgarh", "Baghpat", "Bahraich", "Ballia", "Balrampur", "Banda", "Barabanki",
+    "Bareilly", "Basti", "Bhadohi", "Bijnor", "Budaun", "Bulandshahr", "Chandauli",
+    "Chitrakoot", "Deoria", "Etah", "Etawah", "Farrukhabad", "Fatehpur", "Firozabad",
+    "Gautam Buddh Nagar", "Ghaziabad", "Ghazipur", "Gonda", "Gorakhpur", "Hamirpur",
+    "Hapur", "Hardoi", "Hathras", "Jalaun", "Jaunpur", "Jhansi", "Kannauj", "Kanpur Dehat",
+    "Kanpur Nagar", "Kasganj", "Kaushambi", "Kheri", "Kushinagar", "Lalitpur", "Lucknow",
+    "Maharajganj", "Mahoba", "Mainpuri", "Mathura", "Mau", "Meerut", "Mirzapur",
+    "Moradabad", "Muzaffarnagar", "Pilibhit", "Pratapgarh", "Prayagraj", "Raebareli",
+    "Rampur", "Saharanpur", "Sambhal", "Sant Kabir Nagar", "Shahjahanpur", "Shamli",
+    "Shrawasti", "Siddharthnagar", "Sitapur", "Sonbhadra", "Sultanpur", "Unnao",
+    "Varanasi"
+  ],
+  "Uttarakhand": [
+    "Almora", "Bageshwar", "Chamoli", "Champawat", "Dehradun", "Haridwar",
+    "Nainital", "Pauri Garhwal", "Pithoragarh", "Rudraprayag", "Tehri Garhwal",
+    "Udham Singh Nagar", "Uttarkashi"
+  ],
+  "West Bengal": [
+    "Alipurduar", "Bankura", "Birbhum", "Cooch Behar", "Dakshin Dinajpur",
+    "Darjeeling", "Hooghly", "Howrah", "Jalpaiguri", "Jhargram", "Kalimpong",
+    "Kolkata", "Malda", "Murshidabad", "Nadia", "North 24 Parganas", "Paschim Bardhaman",
+    "Paschim Medinipur", "Purba Bardhaman", "Purba Medinipur", "Purulia",
+    "South 24 Parganas", "Uttar Dinajpur"
+  ],
+  "Andaman and Nicobar Islands": ["Nicobar", "North and Middle Andaman", "South Andaman"],
+  "Chandigarh": ["Chandigarh"],
+  "Dadra and Nagar Haveli and Daman and Diu": [
+    "Dadra and Nagar Haveli", "Daman", "Diu"
+  ],
+  "Delhi": [
+    "Central Delhi", "East Delhi", "New Delhi", "North Delhi", "North East Delhi",
+    "North West Delhi", "Shahdara", "South Delhi", "South East Delhi", "South West Delhi", "West Delhi"
+  ],
+  "Jammu and Kashmir": [
+    "Anantnag", "Bandipora", "Baramulla", "Budgam", "Doda", "Ganderbal", "Jammu",
+    "Kathua", "Kishtwar", "Kulgam", "Kupwara", "Poonch", "Pulwama", "Rajouri",
+    "Ramban", "Reasi", "Samba", "Shopian", "Srinagar", "Udhampur"
+  ],
+  "Ladakh": ["Kargil", "Leh"],
+  "Lakshadweep": [
+    "Agatti", "Amini", "Andrott", "Bitra", "Chetlat", "Kadmat", "Kalpeni",
+    "Kavaratti", "Kiltan", "Minicoy"
+  ],
+  "Puducherry": ["Karaikal", "Mahe", "Puducherry", "Yanam"]
 };
+
 
 interface ExistingProposal {
   id: number;
@@ -106,11 +263,14 @@ export default function ProjectForm({ existingProposal, onEditMode }: ProjectFor
   const [uploadProgress, setUploadProgress] = useState<number>(0);
   const [loadedProposal, setLoadedProposal] = useState<ExistingProposal | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [teamData, setTeamData] = useState<any>(null);
+  const [fileError, setFileError] = useState<string | null>(null);
 
   const {
     register,
     handleSubmit,
     setValue,
+    watch,
     formState: { errors },
   } = useForm<ProjectFormData>({
     resolver: zodResolver(projectSchema),
@@ -118,6 +278,36 @@ export default function ProjectForm({ existingProposal, onEditMode }: ProjectFor
 
   const states = Object.keys(indianStatesWithDistricts);
   const districts = selectedState ? indianStatesWithDistricts[selectedState] || [] : [];
+
+  // Load team data to get project pillar for auto-filling category
+  useEffect(() => {
+    async function loadTeamData() {
+      try {
+        const response = await fetch('/api/student/team');
+        if (response.ok) {
+          const data = await response.json();
+          if (data.success && data.team) {
+            console.log('Team data loaded:', data.team);
+            setTeamData(data.team);
+            
+            // Auto-fill category and title with team data (always override)
+            if (data.team.projectPillar) {
+              console.log('Auto-filling category with project pillar:', data.team.projectPillar);
+              setValue('category', data.team.projectPillar);
+            }
+            if (data.team.projectTitle) {
+              console.log('Auto-filling title with project title:', data.team.projectTitle);
+              setValue('title', data.team.projectTitle);
+            }
+          }
+        }
+      } catch (error) {
+        console.error('Error loading team data:', error);
+      }
+    }
+
+    loadTeamData();
+  }, [existingProposal, loadedProposal, setValue]);
 
   // Load existing proposal data if user has a rejected proposal
   useEffect(() => {
@@ -168,6 +358,8 @@ export default function ProjectForm({ existingProposal, onEditMode }: ProjectFor
     if (files) {
       const fileArray = Array.from(files);
       setSelectedFiles(prev => [...prev, ...fileArray]);
+      // Clear file error when files are selected
+      setFileError(null);
     }
   };
 
@@ -214,29 +406,44 @@ export default function ProjectForm({ existingProposal, onEditMode }: ProjectFor
       // Notify parent that we're in edit mode
       onEditMode?.(true);
       
-      // Set basic fields
-      setValue('title', proposal.title);
+      // Set basic fields - title should always come from team data, not proposal
+      // setValue('title', proposal.title); // Comment out - title now auto-filled from team
       setValue('description', proposal.description);
-      setValue('content', proposal.content);
       
-      // Parse metadata from link field (JSON string) or fallback to metadata property
+      // Extract content and metadata
+      let cleanContent = proposal.content;
       let metadata = null;
       
-      // Try to parse metadata from link field first (new format)
-      if (proposal.link) {
+      // Try to extract metadata from content field (new format)
+      const metadataMatch = proposal.content.match(/<!-- METADATA:(.*?) -->/);
+      if (metadataMatch) {
+        try {
+          metadata = JSON.parse(metadataMatch[1]);
+          // Remove the metadata comment from content
+          cleanContent = proposal.content.replace(/\n\n<!-- METADATA:.*? -->/, '');
+          console.log('Extracted metadata from content field:', metadata);
+        } catch (e) {
+          console.log('Failed to parse metadata from content field');
+        }
+      }
+      
+      // Fallback: Try to parse metadata from link field (old format)
+      if (!metadata && proposal.link) {
         try {
           metadata = JSON.parse(proposal.link);
-          console.log('Parsed metadata from link field:', metadata);
+          console.log('Parsed metadata from link field (legacy):', metadata);
         } catch (e) {
           console.log('Link field is not JSON metadata, checking metadata property. Link content:', proposal.link);
         }
       }
       
-      // Fallback to existing metadata property (old format)
+      // Fallback to existing metadata property (legacy format)
       if (!metadata && proposal.metadata) {
         metadata = proposal.metadata;
         console.log('Using metadata property:', metadata);
       }
+      
+      setValue('content', cleanContent);
       
       // Set metadata fields if they exist
       if (metadata) {
@@ -303,6 +510,16 @@ export default function ProjectForm({ existingProposal, onEditMode }: ProjectFor
   const onSubmit = async (data: ProjectFormData) => {
     setIsSubmitting(true);
     
+    // Check if files are uploaded (required)
+    if (selectedFiles.length === 0 && (!existingProposal?.attachment && !loadedProposal?.attachment)) {
+      setFileError('At least one file must be uploaded');
+      setIsSubmitting(false);
+      return;
+    }
+    
+    // Clear file error if validation passes
+    setFileError(null);
+    
     try {
       // Check if user is logged in and has a team
       try {
@@ -355,10 +572,10 @@ export default function ProjectForm({ existingProposal, onEditMode }: ProjectFor
       const payload = {
         title: data.title,
         description: data.description,
-        content: data.content,
+        content: data.content + '\n\n<!-- METADATA:' + JSON.stringify(metadata) + ' -->',  // Store metadata as hidden HTML comment in content
         // Optional fields
         attachment: uploadedFileUrls.join(','),  // Store multiple file URLs as comma-separated string
-        link: JSON.stringify(metadata),         // Store metadata as JSON in link field for auto-fill
+        link: '',  // Keep link field empty so it doesn't show in mentor view
         
         // Extra metadata fields (these won't be used by the API validation
         // but will be available in the raw request body)
@@ -473,31 +690,19 @@ export default function ProjectForm({ existingProposal, onEditMode }: ProjectFor
       <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
       <div>
         <label className="block text-sm font-medium text-gray-700">Project Title</label>
-        <input
-          type="text"
-          {...register('title')}
-          className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:ring focus:ring-primary"
-        />
+        <input type="hidden" {...register('title')} />
+        <div className="mt-1 block w-full px-3 py-2 bg-gray-50 border border-gray-300 rounded-md text-gray-900">
+          {watch('title') || 'Loading...'}
+        </div>
         {errors.title && <p className="text-red-600 text-sm">{errors.title.message}</p>}
       </div>
 
       <div>
         <label className="block text-sm font-medium text-gray-700">Project Category</label>
-        <select
-          {...register('category')}
-          className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:ring focus:ring-primary"
-        >
-          <option value="">Select category</option>
-          <option value="Health and Wellbeing">Health and Wellbeing</option>
-          <option value="Awareness Campaigns">Awareness Campaigns</option>
-          <option value="Indian History and Heritage">Indian History and Heritage</option>
-          <option value="Amrita Talks">Amrita Talks</option>
-          <option value="Financial Literacy">Financial Literacy</option>
-          <option value="21st Century Values">21st Century Values</option>
-          <option value="Student Mentorship">Student Mentorship</option>
-          <option value="Student Clubs">Student Clubs</option>
-          <option value="Women Empowerment">Women Empowerment</option>
-        </select>
+        <input type="hidden" {...register('category')} />
+        <div className="mt-1 block w-full px-3 py-2 bg-gray-50 border border-gray-300 rounded-md text-gray-900">
+          {watch('category') || 'Loading...'}
+        </div>
         {errors.category && <p className="text-red-600 text-sm">{errors.category.message}</p>}
       </div>
 
@@ -508,7 +713,9 @@ export default function ProjectForm({ existingProposal, onEditMode }: ProjectFor
       </div>
 
       <div>
-        <label className="block text-sm font-medium text-gray-700">State</label>
+        <label className="block text-sm font-medium text-gray-700">
+          State <span className="text-red-500">*</span>
+        </label>
         <select
           {...register('state')}
           onChange={(e) => {
@@ -522,10 +729,13 @@ export default function ProjectForm({ existingProposal, onEditMode }: ProjectFor
             <option key={state} value={state}>{state}</option>
           ))}
         </select>
+        {errors.state && <p className="text-red-600 text-sm">{errors.state.message}</p>}
       </div>
 
       <div>
-        <label className="block text-sm font-medium text-gray-700">District</label>
+        <label className="block text-sm font-medium text-gray-700">
+          District <span className="text-red-500">*</span>
+        </label>
         <select
           {...register('district')}
           className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:ring focus:ring-primary"
@@ -535,57 +745,75 @@ export default function ProjectForm({ existingProposal, onEditMode }: ProjectFor
             <option key={district} value={district}>{district}</option>
           ))}
         </select>
+        {errors.district && <p className="text-red-600 text-sm">{errors.district.message}</p>}
       </div>
 
       <div>
-        <label className="block text-sm font-medium text-gray-700">City</label>
+        <label className="block text-sm font-medium text-gray-700">
+          City <span className="text-red-500">*</span>
+        </label>
         <input
           type="text"
           {...register('city')}
           className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:ring focus:ring-primary"
         />
+        {errors.city && <p className="text-red-600 text-sm">{errors.city.message}</p>}
       </div>
 
       <div>
-        <label className="block text-sm font-medium text-gray-700">Place Visited</label>
+        <label className="block text-sm font-medium text-gray-700">
+          Place Visited <span className="text-red-500">*</span>
+        </label>
         <input
           type="text"
           {...register('placeVisited')}
           className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:ring focus:ring-primary"
         />
+        {errors.placeVisited && <p className="text-red-600 text-sm">{errors.placeVisited.message}</p>}
       </div>
 
       <div>
-        <label className="block text-sm font-medium text-gray-700">Travel Time</label>
+        <label className="block text-sm font-medium text-gray-700">
+          Travel Time <span className="text-red-500">*</span>
+        </label>
         <input
           type="text"
           placeholder="e.g. 2 hours 30 minutes"
           {...register('travelTime')}
           className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:ring focus:ring-primary"
         />
+        {errors.travelTime && <p className="text-red-600 text-sm">{errors.travelTime.message}</p>}
       </div>
 
       <div>
-        <label className="block text-sm font-medium text-gray-700">Execution Time</label>
+        <label className="block text-sm font-medium text-gray-700">
+          Execution Time <span className="text-red-500">*</span>
+        </label>
         <input
           type="text"
           placeholder="e.g. 1 hour"
           {...register('executionTime')}
           className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:ring focus:ring-primary"
         />
+        {errors.executionTime && <p className="text-red-600 text-sm">{errors.executionTime.message}</p>}
       </div>
 
       <div>
-        <label className="block text-sm font-medium text-gray-700">Date of Completion</label>
+        <label className="block text-sm font-medium text-gray-700">
+          Date of Completion <span className="text-red-500">*</span>
+        </label>
         <input
           type="date"
           {...register('completionDate')}
           className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:ring focus:ring-primary"
         />
+        {errors.completionDate && <p className="text-red-600 text-sm">{errors.completionDate.message}</p>}
       </div>
 
       <div>
-        <label className="block text-sm font-medium text-gray-700">Description (min 100 characters)</label>
+        <label className="block text-sm font-medium text-gray-700">
+          Description (min 100 characters) <span className="text-red-500">*</span>
+        </label>
         <textarea
           {...register('description')}
           rows={4}
@@ -596,7 +824,9 @@ export default function ProjectForm({ existingProposal, onEditMode }: ProjectFor
       </div>
 
       <div>
-        <label className="block text-sm font-medium text-gray-700">Content (min 100 characters)</label>
+        <label className="block text-sm font-medium text-gray-700">
+          Content (min 100 characters) <span className="text-red-500">*</span>
+        </label>
         <textarea
           {...register('content')}
           rows={4}
@@ -610,7 +840,7 @@ export default function ProjectForm({ existingProposal, onEditMode }: ProjectFor
       <div className="space-y-4">
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-2">
-            Upload Supporting Files (Optional)
+            Upload Supporting Files <span className="text-red-500">*</span>
           </label>
           <div className="border-2 border-dashed border-gray-300 rounded-lg p-6">
             <div className="text-center">
@@ -640,6 +870,11 @@ export default function ProjectForm({ existingProposal, onEditMode }: ProjectFor
               </div>
             </div>
           </div>
+          
+          {/* File Upload Error Message */}
+          {fileError && (
+            <p className="text-red-600 text-sm mt-2">{fileError}</p>
+          )}
 
           {/* Selected Files Preview */}
           {selectedFiles.length > 0 && (
