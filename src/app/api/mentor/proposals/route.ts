@@ -89,10 +89,27 @@ export async function GET(req: NextRequest) {
       },
     });
 
-    // Since the student form fields are stored in the request but not in the database,
-    // we need to ensure the frontend shows all the information that was submitted.
-    // For now, let's return the proposals with all available data
-    return NextResponse.json({ data: proposals });
+    // Extract metadata from content field and add it to each proposal
+    const proposalsWithMetadata = proposals.map(proposal => {
+      let metadata = {};
+      
+      // Extract metadata from HTML comment in content field
+      try {
+        const metadataMatch = proposal.content.match(/<!-- METADATA:(.*?) -->/);
+        if (metadataMatch) {
+          metadata = JSON.parse(metadataMatch[1]);
+        }
+      } catch (error) {
+        console.error('Error parsing metadata for proposal', proposal.id, error);
+      }
+      
+      return {
+        ...proposal,
+        metadata
+      };
+    });
+
+    return NextResponse.json({ data: proposalsWithMetadata });
   } catch (error) {
     console.error("Error fetching proposals:", error);
     return NextResponse.json(
