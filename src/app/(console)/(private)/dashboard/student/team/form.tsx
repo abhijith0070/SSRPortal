@@ -126,7 +126,9 @@ interface Mentor {
 interface BatchOption {
   label: string;
   value: string;
-  range: [number, number];
+  range?: [number, number];
+  ranges?: [number, number][];
+
 }
 
 // Constants
@@ -134,11 +136,11 @@ const BATCH_OPTIONS: BatchOption[] = [
   { label: 'AI A', value: 'AI_A', range: [1, 12] },
   { label: 'AI B', value: 'AI_B', range: [13, 23] },
   { label: 'AI-DS', value: 'AI_DS', range: [24, 34] },
-  { label: 'CYS', value: 'CYS', range: [35, 41] },
+  { label: 'CYS', value: 'CYS', ranges: [[35, 41], [162, 162]] }, // Fixed: CYS gets 162
   { label: 'CSE A', value: 'CSE_A', range: [42, 52] },
   { label: 'CSE B', value: 'CSE_B', range: [53, 64] },
   { label: 'CSE C', value: 'CSE_C', range: [65, 77] },
-  { label: 'CSE D', value: 'CSE_D', range: [78, 89] },
+  { label: 'CSE D', value: 'CSE_D', ranges: [[78, 89], [161, 161]] }, // Fixed: CSE D gets 161
   { label: 'ECE A', value: 'ECE_A', range: [90, 99] },
   { label: 'ECE B', value: 'ECE_B', range: [100, 112] },
   { label: 'EAC', value: 'EAC', range: [113, 123] },
@@ -237,24 +239,44 @@ export default function TeamForm({ initialData, isEditing = false }: TeamFormPro
     }
   }, [initialData, isEditing, reset]);
 
+  // Watch the batch field value
+  const watchedBatch = watch('batch');
+
   // Generate team numbers based on selected batch
   useEffect(() => {
-    if (!selectedBatch) {
+    if (!watchedBatch) {
       setAvailableTeamNumbers([]);
       return;
     }
 
-    const batch = BATCH_OPTIONS.find(b => b.label === selectedBatch);
+    const batch = BATCH_OPTIONS.find(b => b.label === watchedBatch);
     if (!batch) return;
 
-    const [start, end] = batch.range;
-    const teamNumbers = Array.from({ length: end - start + 1 }, (_, i) => {
-      const num = (start + i).toString().padStart(3, '0');
-      return `SSR 25-${num}`;
-    });
+    let teamNumbers: string[] = [];
+
+    if (batch.ranges) {
+      // Handle multiple ranges (CSE D: 78-89 and 161-162)
+      batch.ranges.forEach(([start, end]) => {
+        const rangeNumbers = Array.from({ length: end - start + 1 }, (_, i) => {
+          const num = (start + i).toString().padStart(3, '0');
+          return `SSR 25-${num}`;
+        });
+        teamNumbers.push(...rangeNumbers);
+      });
+    } else if (batch.range) {
+      // Handle single range (all other batches)
+      const [start, end] = batch.range;
+      teamNumbers = Array.from({ length: end - start + 1 }, (_, i) => {
+        const num = (start + i).toString().padStart(3, '0');
+        return `SSR 25-${num}`;
+      });
+    }
     
     setAvailableTeamNumbers(teamNumbers);
-  }, [selectedBatch]);
+    
+    // Update selectedBatch to keep UI in sync
+    setSelectedBatch(watchedBatch);
+  }, [watchedBatch]);
 
   // API calls
   const checkExistingUser = useCallback(async (email: string) => {
