@@ -6,7 +6,7 @@ const LoadingPage = () => {
               role="status"
           />
           <div className="uppercase font-light ml-4 text-primary text-xl">
-              Loading
+              Loading...
           </div>
       </div>
   );
