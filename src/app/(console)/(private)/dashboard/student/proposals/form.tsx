@@ -50,7 +50,7 @@ const indianStatesWithDistricts: Record<string, string[]> = {
     "Chirang", "Darrang", "Dhemaji", "Dhubri", "Dibrugarh", "Goalpara",
     "Golaghat", "Hailakandi", "Hojai", "Jorhat", "Kamrup", "Kamrup Metropolitan",
     "Karbi Anglong", "Karimganj", "Kokrajhar", "Lakhimpur", "Majuli", "Morigaon",
-    "Nagaon", "Nalbari", "Sivasagar", "Sonitpur", "South Salmara-Mankachar",
+     "Sivasagar", "Sonitpur", "South Salmara-Mankachar",
     "Tinsukia", "Udalguri", "West Karbi Anglong"
   ],
   "Bihar": [
