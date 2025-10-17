@@ -75,7 +75,10 @@ export const authOptions: AuthOptions = {
         }
 
         // Handle role-specific validation
-        if (credentials.role === 'mentor' && user.role !== 'MENTOR') {
+        if (credentials.role === 'admin' && !user.isAdmin) {
+          console.log('Not an admin account');
+          throw new Error('This login is only for administrators');
+        } else if (credentials.role === 'mentor' && user.role !== 'MENTOR') {
           console.log('Not a mentor account');
           throw new Error('This login is only for mentors');
         } else if (credentials.role === 'student' && user.role !== 'STUDENT') {

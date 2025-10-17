@@ -10,7 +10,9 @@ import {
   FileText,
   Settings,
   BookOpen,
+  File,
 } from 'lucide-react';
+import { FcExport } from 'react-icons/fc';
 
 const studentLinks = [
   { href: '/dashboard/student', label: 'Dashboard', icon: Home },
@@ -27,8 +29,8 @@ const mentorLinks = [
 
 const adminLinks = [
   { href: '/dashboard/admin', label: 'Dashboard', icon: Home },
-  { href: '/dashboard/admin/users', label: 'Users', icon: Users },
-  { href: '/dashboard/admin/settings', label: 'Settings', icon: Settings },
+  { href: '/dashboard/admin/view_details', label: 'View Team', icon: Users  },
+  { href: '/dashboard/admin/export_details', label: 'Export Data', icon: File },
 ];
 
 export default function Sidebar() {

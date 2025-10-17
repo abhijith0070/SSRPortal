@@ -5,6 +5,7 @@ import { useSession } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
 import StudentDashboard from '../student/page';
 import MentorDashboard from '../mentor/page';
+import AdminDashboard from '../admin/page';
 import { notFound } from 'next/navigation';
 
 export default function RoleDashboard({
@@ -46,8 +47,8 @@ export default function RoleDashboard({
       return <StudentDashboard />;
     case '_mentor':
       return <MentorDashboard />;
-    // case '_admin':
-    //   return <AdminDashboard />;
+    case '_admin':
+      return <AdminDashboard />;
     default:
       return notFound();
   }
