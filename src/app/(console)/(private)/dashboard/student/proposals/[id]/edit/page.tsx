@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useSession } from 'next-auth/react';
-import ProposalForm from '../../form';
+import ProjectForm from '../../form';
 import toast from 'react-hot-toast';
 
 interface Proposal {
@@ -12,6 +12,7 @@ interface Proposal {
   description: string;
   content: string;
   attachment?: string;
+  link?: string;
   state: string;
 }
 
@@ -65,30 +66,17 @@ export default function EditProposalPage({ params }: { params: { id: string } })
     );
   }
 
-  // Extract form data from content
-  const contentSections = proposal.content.split('\n\n');
-  const initialData = {
-    title: proposal.title,
-    description: proposal.description,
-    objectives: contentSections[0]?.replace('Objectives:\n', '') || '',
-    methodology: contentSections[1]?.replace('Methodology:\n', '') || '',
-    expectedOutcomes: contentSections[2]?.replace('Expected Outcomes:\n', '') || '',
-    timeline: contentSections[3]?.replace('Timeline:\n', '') || '',
-    references: contentSections[4]?.replace('References:\n', '') || '',
-    attachment: proposal.attachment
-  };
-
   return (
     <div className="container mx-auto px-4 py-8">
       <div className="flex items-center justify-between mb-6">
         <h1 className="text-2xl font-bold text-gray-900">Edit Proposal</h1>
         <div className="text-sm text-gray-500">
-          Status: <span className="font-semibold">{proposal.state}</span>
+          Status: <span className="font-semibold">{proposal.state === 'DRAFT' ? 'Pending' : proposal.state}</span>
         </div>
       </div>
       <div className="bg-white rounded-lg shadow p-6">
-        <ProposalForm initialData={initialData} proposalId={params.id} />
+        <ProjectForm existingProposal={proposal} />
       </div>
     </div>
   );
-} 
+}
