@@ -19,6 +19,7 @@ const projectSchema = proposalSchema.extend({
   travelTime: z.string().min(1, 'Travel time is required'),
   executionTime: z.string().min(1, 'Execution time is required'),
   completionDate: z.string().min(1, 'Completion date is required'),
+  gdriveLink: z.string().url('Please enter a valid Google Drive URL').min(1, 'Google Drive link is required'),
 });
 
 type ProjectFormData = z.infer<typeof projectSchema>;
@@ -49,7 +50,7 @@ const indianStatesWithDistricts: Record<string, string[]> = {
     "Chirang", "Darrang", "Dhemaji", "Dhubri", "Dibrugarh", "Goalpara",
     "Golaghat", "Hailakandi", "Hojai", "Jorhat", "Kamrup", "Kamrup Metropolitan",
     "Karbi Anglong", "Karimganj", "Kokrajhar", "Lakhimpur", "Majuli", "Morigaon",
-    "Nagaon", "Nalbari", "Sivasagar", "Sonitpur", "South Salmara-Mankachar",
+     "Sivasagar", "Sonitpur", "South Salmara-Mankachar",
     "Tinsukia", "Udalguri", "West Karbi Anglong"
   ],
   "Bihar": [
@@ -445,6 +446,9 @@ export default function ProjectForm({ existingProposal, onEditMode }: ProjectFor
       
       setValue('content', cleanContent);
       
+      // Set Google Drive link from the proposal's link field
+      setValue('gdriveLink', proposal.link || '');
+      
       // Set metadata fields if they exist
       if (metadata) {
         console.log('Setting form values with metadata:', metadata);
@@ -575,7 +579,7 @@ export default function ProjectForm({ existingProposal, onEditMode }: ProjectFor
         content: data.content + '\n\n<!-- METADATA:' + JSON.stringify(metadata) + ' -->',  // Store metadata as hidden HTML comment in content
         // Optional fields
         attachment: uploadedFileUrls.join(','),  // Store multiple file URLs as comma-separated string
-        link: '',  // Keep link field empty so it doesn't show in mentor view
+        link: data.gdriveLink || '',  // Store Google Drive link in the link field
         
         // Extra metadata fields (these won't be used by the API validation
         // but will be available in the raw request body)
@@ -1001,6 +1005,35 @@ export default function ProjectForm({ existingProposal, onEditMode }: ProjectFor
               </div>
             </div>
           )}
+        </div>
+
+        {/* Google Drive Link Section */}
+        <div className="bg-gray-50 rounded-xl p-6">
+          <h2 className="text-xl font-semibold text-gray-900 mb-6 flex items-center">
+            <div className="w-8 h-8 bg-green-100 rounded-lg flex items-center justify-center mr-3">
+              <svg className="w-4 h-4 text-green-600" fill="currentColor" viewBox="0 0 20 20">
+                <path fillRule="evenodd" d="M4 4a2 2 0 00-2 2v10a2 2 0 002 2h12a2 2 0 002-2V6a2 2 0 00-2-2H4zm8 8a2 2 0 11-4 0 2 2 0 014 0zm-2-6a4 4 0 100 8 4 4 0 000-8z" clipRule="evenodd" />
+              </svg>
+            </div>
+            Google Drive Link with Photos and Videos
+          </h2>
+          
+          <div>
+            <label className="block text-sm font-semibold text-gray-700 mb-2">
+              Google Drive Link <span className="text-red-500">*</span>
+              <span className="text-xs text-gray-500 font-normal ml-1">- Share link to folder with photos/videos</span>
+            </label>
+            <input
+              type="url"
+              {...register('gdriveLink')}
+              placeholder="https://drive.google.com/drive/folders/..."
+              className="block w-full px-4 py-3 bg-white border border-gray-300 rounded-lg shadow-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors"
+            />
+            {errors.gdriveLink && <p className="text-red-600 text-sm mt-1 font-medium">{errors.gdriveLink.message}</p>}
+            <p className="text-xs text-gray-500 mt-2">
+              💡 <strong>Tip:</strong> Share your Google Drive folder with photos and videos from your project execution. Make sure the link is publicly accessible.
+            </p>
+          </div>
         </div>
 
         {/* Submit Button */}
